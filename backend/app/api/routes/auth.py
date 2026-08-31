@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginResponse, UserResponse
+from app.api.dependencies.auth import get_current_user
 
 
 router = APIRouter(
@@ -52,3 +53,11 @@ def login(
             role=user.role.value,
         ),
     )
+
+@router.post("/logout")
+def logout(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "message": "Logout successful",
+    }
