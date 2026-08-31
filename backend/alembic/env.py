@@ -12,7 +12,13 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import Employee, FaceData, User
+from app.models import (
+    Attendance,
+    AttendanceStatus,
+    Employee,
+    FaceData,
+    User,
+)
 
 
 # Alembic Config object
