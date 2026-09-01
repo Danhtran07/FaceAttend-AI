@@ -16,12 +16,7 @@ dist/
 .vscode/
 .idea/
 
-# OS
-.DS_Store
-Thumbs.db
-
 # ML
-models/
 *.onnx
 *.pth
 *.pt
