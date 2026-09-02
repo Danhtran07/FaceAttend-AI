@@ -14,8 +14,8 @@ pytest -v
 
 | Metric | Value |
 |--------|-------|
-| Total test cases | 18 |
-| Passed (mock/unit) | 18 |
+| Total test cases | 20 |
+| Passed (mock/unit) | 20 |
 | Failed | 0 |
 | Recognition accuracy (mock pipeline) | 100% on registered match case |
 
