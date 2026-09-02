@@ -1,18 +1,9 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from enum import Enum
-from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, field_serializer
 
-VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
-
-
-def to_vietnam_time(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(VIETNAM_TZ)
+from app.core.timezone import to_vietnam_time
 
 
 class AttendanceStatus(str, Enum):

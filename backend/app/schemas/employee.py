@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
+
+from app.core.timezone import to_vietnam_time
 
 
 class EmployeeBase(BaseModel):
@@ -26,5 +28,9 @@ class EmployeeResponse(EmployeeBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, value: datetime | None, _info):
+        return to_vietnam_time(value)
 
     model_config = ConfigDict(from_attributes=True)
