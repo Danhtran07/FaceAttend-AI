@@ -5,7 +5,7 @@ from app.api.dependencies.auth import get_current_admin
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 
 router = APIRouter(
@@ -82,3 +82,83 @@ def create_user(
     db.refresh(user)
 
     return user
+
+
+@router.put(
+    "/{user_id}",
+    response_model=UserResponse,
+)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    update_data = payload.model_dump(
+        exclude_unset=True,
+    )
+
+    if "username" in update_data:
+        existing_user = (
+            db.query(User)
+            .filter(
+                User.username == update_data["username"],
+                User.id != user_id,
+            )
+            .first()
+        )
+
+        if existing_user is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already exists",
+            )
+
+    if "password" in update_data:
+        user.password_hash = hash_password(
+            update_data.pop("password")
+        )
+
+    for field, value in update_data.items():
+        setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    db.delete(user)
+    db.commit()
