@@ -1,12 +1,14 @@
+from datetime import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
 from app.core.database import get_db
-from app.models.attendance import Attendance
+from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceResponse,
@@ -20,6 +22,27 @@ router = APIRouter(
 )
 
 
+def _compute_status(check_in, check_out=None, explicit_status=None):
+    if explicit_status is not None:
+        return explicit_status
+
+    if check_in is None:
+        return AttendanceStatus.ABSENT
+
+    if check_in.time() > time(8, 30):
+        return AttendanceStatus.LATE
+
+    return AttendanceStatus.PRESENT
+
+
+def _get_employee_for_current_user(db: Session, current_user: User):
+    return (
+        db.query(Employee)
+        .filter(Employee.user_id == current_user.id)
+        .first()
+    )
+
+
 @router.get(
     "",
     response_model=list[AttendanceResponse],
@@ -28,6 +51,16 @@ def get_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        employee = _get_employee_for_current_user(db, current_user)
+        if employee is None:
+            return []
+        return (
+            db.query(Attendance)
+            .filter(Attendance.employee_id == employee.id)
+            .all()
+        )
+
     return db.query(Attendance).all()
 
 
@@ -51,6 +84,14 @@ def get_attendance_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Attendance record not found",
         )
+
+    if current_user.role == UserRole.EMPLOYEE:
+        employee = _get_employee_for_current_user(db, current_user)
+        if employee is None or attendance.employee_id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own attendance records",
+            )
 
     return attendance
 
@@ -77,6 +118,14 @@ def create_attendance(
             detail="Employee not found",
         )
 
+    if current_user.role == UserRole.EMPLOYEE:
+        current_employee = _get_employee_for_current_user(db, current_user)
+        if current_employee is None or payload.employee_id != current_employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only create attendance for your own employee record",
+            )
+
     existing_attendance = (
         db.query(Attendance)
         .filter(
@@ -92,12 +141,25 @@ def create_attendance(
             detail="Attendance record already exists for this employee and date",
         )
 
+    if payload.check_out is not None and payload.check_in is not None:
+        if payload.check_out < payload.check_in:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="check_out must be after check_in",
+            )
+
+    computed_status = _compute_status(
+        payload.check_in,
+        payload.check_out,
+        payload.status,
+    )
+
     attendance = Attendance(
         employee_id=payload.employee_id,
         date=payload.date,
         check_in=payload.check_in,
         check_out=payload.check_out,
-        status=payload.status,
+        status=computed_status,
     )
 
     db.add(attendance)
@@ -138,10 +200,35 @@ def update_attendance(
             detail="Attendance record not found",
         )
 
+    if current_user.role == UserRole.EMPLOYEE:
+        employee = _get_employee_for_current_user(db, current_user)
+        if employee is None or attendance.employee_id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own attendance records",
+            )
+
     update_data = payload.model_dump(exclude_unset=True)
 
-    for field, value in update_data.items():
-        setattr(attendance, field, value)
+    if "check_in" in update_data and update_data["check_in"] is not None:
+        attendance.check_in = update_data["check_in"]
+
+    if "check_out" in update_data and update_data["check_out"] is not None:
+        if attendance.check_in is not None and update_data["check_out"] < attendance.check_in:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="check_out must be after check_in",
+            )
+        attendance.check_out = update_data["check_out"]
+
+    if "status" in update_data and update_data["status"] is not None:
+        attendance.status = update_data["status"]
+    else:
+        attendance.status = _compute_status(
+            attendance.check_in,
+            attendance.check_out,
+            attendance.status,
+        )
 
     db.commit()
     db.refresh(attendance)
@@ -169,6 +256,14 @@ def delete_attendance(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Attendance record not found",
         )
+
+    if current_user.role == UserRole.EMPLOYEE:
+        employee = _get_employee_for_current_user(db, current_user)
+        if employee is None or attendance.employee_id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own attendance records",
+            )
 
     db.delete(attendance)
     db.commit()

@@ -16,7 +16,7 @@ class AttendanceBase(BaseModel):
 
 
 class AttendanceCreate(AttendanceBase):
-    status: AttendanceStatus = AttendanceStatus.ABSENT
+    status: AttendanceStatus | None = None
     check_in: datetime | None = None
     check_out: datetime | None = None
 
