@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -181,6 +181,27 @@ def test_create_attendance_auto_sets_late_status_when_check_in_is_late(
     assert response.json()["status"] == "LATE"
 
 
+def test_attendance_response_uses_vietnam_timezone(db_session, auth_headers, employee):
+    record = Attendance(
+        employee_id=employee.id,
+        date=date(2026, 9, 2),
+        check_in=datetime(2026, 9, 2, 8, 30, 0, tzinfo=timezone.utc),
+        status=AttendanceStatus.PRESENT,
+        created_at=datetime(2026, 9, 2, 8, 0, 0, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 9, 2, 8, 0, 0, tzinfo=timezone.utc),
+    )
+    db_session.add(record)
+    db_session.commit()
+    db_session.refresh(record)
+
+    response = client.get("/api/attendance", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()[0]
+    assert data["check_in"] == "2026-09-02T15:30:00+07:00"
+    assert data["created_at"] == "2026-09-02T15:00:00+07:00"
+
+
 def test_create_attendance_conflict_for_same_employee_and_date(
     db_session,
     auth_headers,
@@ -228,7 +249,7 @@ def test_update_attendance_success(db_session, auth_headers, employee):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "PRESENT"
-    assert data["check_in"] == "2026-09-05T08:15:00"
+    assert data["check_in"] == "2026-09-05T15:15:00+07:00"
 
 
 def test_update_attendance_rejects_check_out_before_check_in(
