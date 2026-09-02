@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML
+models/
+*.onnx
+*.pth
+*.pt
+
+# Logs
+*.log
