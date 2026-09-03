@@ -210,7 +210,7 @@ def update_attendance(
 
     update_data = payload.model_dump(exclude_unset=True)
 
-    if "check_in" in update_data and update_data["check_in"] is not None:
+    if "check_in" in update_data:
         attendance.check_in = update_data["check_in"]
 
     if "check_out" in update_data and update_data["check_out"] is not None:
@@ -227,7 +227,6 @@ def update_attendance(
         attendance.status = _compute_status(
             attendance.check_in,
             attendance.check_out,
-            attendance.status,
         )
 
     db.commit()

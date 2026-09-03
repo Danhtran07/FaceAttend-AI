@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.api.dependencies.auth import get_current_admin
 from app.core.database import get_db
 from app.core.security import hash_password
-from app.models.user import User
+from app.models.employee import Employee
+from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 
@@ -12,6 +13,20 @@ router = APIRouter(
     prefix="/api/users",
     tags=["Users"],
 )
+
+
+def _create_employee_profile(db: Session, user: User) -> None:
+    if user.employee is not None:
+        return
+
+    db.add(
+        Employee(
+            user_id=user.id,
+            employee_code=f"EMP-{user.id:04d}",
+            full_name=user.username,
+            email=f"{user.username}@local.invalid",
+        )
+    )
 
 
 @router.get(
@@ -78,6 +93,11 @@ def create_user(
     )
 
     db.add(user)
+    db.flush()
+
+    if user.role == UserRole.EMPLOYEE:
+        _create_employee_profile(db, user)
+
     db.commit()
     db.refresh(user)
 
@@ -133,6 +153,9 @@ def update_user(
 
     for field, value in update_data.items():
         setattr(user, field, value)
+
+    if user.role == UserRole.EMPLOYEE:
+        _create_employee_profile(db, user)
 
     db.commit()
     db.refresh(user)
