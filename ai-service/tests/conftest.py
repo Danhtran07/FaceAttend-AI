@@ -90,7 +90,12 @@ def mock_engine(mock_face):
             return self.extract_embedding(face.aligned_face)
 
         def extract_embedding(self, aligned_face):
-            return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+            feature = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+            self._model_embedding_dim = int(feature.shape[0])
+            return feature
+
+        def model_embedding_dim(self):
+            return 4
 
     return MockEngine()
 

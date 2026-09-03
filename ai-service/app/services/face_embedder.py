@@ -89,7 +89,10 @@ class FaceEmbeddingService:
             )
 
     def dimension(self) -> int:
-        return int(self.engine.model_embedding_dim())
+        cached = getattr(self.engine, "_model_embedding_dim", None)
+        if isinstance(cached, int) and cached > 0:
+            return cached
+        return int(self.settings.embedding_dim)
 
     def _validate_vector(self, vector: np.ndarray) -> None:
         expected_dim = self.dimension()
