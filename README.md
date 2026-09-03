@@ -197,3 +197,66 @@ Backend loads embeddings from PostgreSQL and sends them as `candidates`. AI Serv
 
 **Backend integration:** Backend authenticates the request, fetches enrolled embeddings, calls AI `/face/recognize`, then records attendance when `recognized=true`.
 
+AI-06 Enrollment Processing:
+
+```http
+POST /face/enroll
+```
+
+**Flow**
+
+```
+Employee
+   ↓
+Image
+   ↓
+Detection
+   ↓
+Exactly One Face
+   ↓
+Alignment
+   ↓
+Embedding
+   ↓
+Return Embedding
+   ↓
+Backend → PostgreSQL
+```
+
+**Request**
+
+```json
+{
+  "image": "<base64>"
+}
+```
+
+**Success**
+
+```json
+{
+  "success": true,
+  "embedding": [/* float32 vector, typically 512-dim */]
+}
+```
+
+**Failure** (shared AI error shape; ready for AI-07)
+
+```json
+{
+  "success": false,
+  "embedding": null,
+  "error_code": "NO_FACE",
+  "error": {
+    "code": "NO_FACE",
+    "message": "No face detected in the image",
+    "details": {}
+  }
+}
+```
+
+- Uses the **same** Detector, Alignment, Embedding model, and preprocessing as Recognition.
+- Exactly one face required (`0 → NO_FACE`, `>1 → MULTIPLE_FACES`).
+- AI Service does **not** create/update employees or write to the database.
+- **Backend responsibility:** persist the returned embedding in PostgreSQL and link it to the employee record.
+

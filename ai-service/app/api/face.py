@@ -12,14 +12,29 @@ from app.core.schemas import (
     FaceRecognizeRequest,
     FaceRecognizeResponse,
 )
+from app.services.enrollment import EnrollmentService
 from app.services.face_matcher import FaceMatchingService
 from app.services.pipeline import FacePipeline
 from app.services.recognition import RecognitionService
 
 router = APIRouter(prefix="/face", tags=["face"])
-pipeline = FacePipeline()
+
+# Shared singleton stack: models load once via FaceEngine.
 recognition_service = RecognitionService()
-matching_service = FaceMatchingService()
+enrollment_service = EnrollmentService(
+    engine=recognition_service.engine,
+    detector=recognition_service.detector,
+    aligner=recognition_service.aligner,
+    embedder=recognition_service.embedder,
+    settings=recognition_service.settings,
+)
+pipeline = FacePipeline(
+    detector=recognition_service.detector,
+    aligner=recognition_service.aligner,
+    embedder=recognition_service.embedder,
+    recognition=recognition_service,
+)
+matching_service = FaceMatchingService(settings=recognition_service.settings)
 
 
 @router.post("/detect", response_model=FaceDetectionResponse)
@@ -30,8 +45,13 @@ def detect_face(payload: FaceDetectRequest) -> FaceDetectionResponse:
 
 @router.post("/enroll", response_model=FaceEnrollResponse)
 def enroll_face(payload: FaceEnrollRequest) -> FaceEnrollResponse:
-    """Process enrollment image: detect, align, embed. Returns embedding for Backend to store."""
-    return pipeline.enroll(payload.image)
+    """Enroll a face for an employee.
+
+    Detect → exactly one face → align → embed → return embedding.
+    AI Service does not create employees or write to PostgreSQL.
+    Backend stores the returned embedding.
+    """
+    return enrollment_service.enroll(payload.image)
 
 
 @router.post("/match", response_model=FaceMatchResponse)
@@ -78,4 +98,4 @@ async def detect_face_upload(file: UploadFile = File(...)) -> FaceDetectionRespo
 async def enroll_face_upload(file: UploadFile = File(...)) -> FaceEnrollResponse:
     content = await file.read()
     image_b64 = base64.b64encode(content).decode("utf-8")
-    return pipeline.enroll(image_b64)
+    return enrollment_service.enroll(image_b64)

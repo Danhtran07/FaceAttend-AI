@@ -68,6 +68,20 @@ Backend supplies candidates. AI Service does not access the database.
 
 Orchestration: Detector → Alignment → Embedding → Matching. Models loaded once.
 
+## AI-06 Enrollment Processing
+
+`POST /face/enroll` via `EnrollmentService` (same Detector/Alignment/Embedding as Recognition).
+
+| ID | Test Case | Expected Result |
+|----|-----------|-----------------|
+| EN-01 | Valid face | `success=true`, embedding list |
+| EN-02 | No face | `NO_FACE`, `embedding=null` |
+| EN-03 | Multiple faces | `MULTIPLE_FACES` |
+| EN-04 | Invalid image | `INVALID_IMAGE` |
+| EN-05 | Embedding output | numeric vector returned |
+
+Backend stores the embedding. AI Service does not access PostgreSQL.
+
 ---
 
 ## Summary

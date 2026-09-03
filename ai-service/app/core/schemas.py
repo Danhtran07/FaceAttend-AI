@@ -89,15 +89,17 @@ class FaceRecognizeResponse(BaseModel):
 
 
 class FaceEnrollRequest(BaseModel):
-    image: str = Field(..., description="Base64-encoded image")
+    image: str = Field(..., description="Base64-encoded enrollment image")
 
 
 class FaceEnrollResponse(BaseModel):
+    """Enrollment result. Backend persists ``embedding`` in PostgreSQL."""
+
     success: bool = True
     embedding: list[float]
-    dimension: int
-    bbox: list[float]
-    confidence: float
+    dimension: int | None = None
+    bbox: list[float] | None = None
+    confidence: float | None = None
 
 
 class FaceDetectRequest(BaseModel):
@@ -112,4 +114,6 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     success: bool = False
+    embedding: None = None
+    error_code: str
     error: ErrorDetail

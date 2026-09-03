@@ -33,9 +33,10 @@ def test_enroll_api(client, sample_image_b64, monkeypatch):
     from app.core.schemas import FaceEnrollResponse
 
     monkeypatch.setattr(
-        face_api.pipeline,
+        face_api.enrollment_service,
         "enroll",
         lambda image: FaceEnrollResponse(
+            success=True,
             embedding=[1.0, 0.0, 0.0, 0.0],
             dimension=4,
             bbox=[60, 50, 140, 150],
@@ -47,7 +48,25 @@ def test_enroll_api(client, sample_image_b64, monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    assert data["dimension"] == 4
+    assert data["embedding"] == [1.0, 0.0, 0.0, 0.0]
+
+
+def test_enroll_api_no_face_error_format(client, sample_image_b64, monkeypatch):
+    from app.api import face as face_api
+    from app.core.errors import AIServiceError, ErrorCode
+
+    def raise_no_face(*args, **kwargs):
+        raise AIServiceError(ErrorCode.NO_FACE, status_code=400)
+
+    monkeypatch.setattr(face_api.enrollment_service, "enroll", raise_no_face)
+
+    response = client.post("/face/enroll", json={"image": sample_image_b64})
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert data["embedding"] is None
+    assert data["error_code"] == ErrorCode.NO_FACE.value
+    assert data["error"]["code"] == ErrorCode.NO_FACE.value
 
 
 def test_recognize_api_known(client, sample_image_b64, monkeypatch):

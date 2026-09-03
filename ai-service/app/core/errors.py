@@ -46,8 +46,15 @@ def build_error_response(
     message: str | None = None,
     details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Unified AI error payload (AI-06/AI-07).
+
+    Includes ``error_code`` and ``embedding: null`` for enrollment/recognition
+    clients while keeping the nested ``error`` object for detailed handling.
+    """
     return {
         "success": False,
+        "embedding": None,
+        "error_code": code.value,
         "error": {
             "code": code.value,
             "message": message or ERROR_MESSAGES[code],

@@ -7,6 +7,7 @@ from app.core.schemas import (
     MatchCandidate,
     RegisteredEmbedding,
 )
+from app.services.enrollment import EnrollmentService
 from app.services.face_aligner import FaceAligner
 from app.services.face_detector import FaceDetector
 from app.services.face_embedder import FaceEmbedder
@@ -18,8 +19,8 @@ from app.utils.image import decode_base64_image
 class FacePipeline:
     """Shared Detection → Alignment → Embedding → Matching pipeline.
 
-    Enrollment and recognition use the same FaceAlignmentService
-    and FaceEmbeddingService. Matching uses Backend-supplied candidates only.
+    Enrollment and recognition reuse the same Detector / Alignment / Embedding.
+    Matching uses Backend-supplied candidates only. No database access.
     """
 
     def __init__(
@@ -29,12 +30,14 @@ class FacePipeline:
         embedder: FaceEmbedder | None = None,
         matcher: FaceMatcher | None = None,
         recognition: RecognitionService | None = None,
+        enrollment: EnrollmentService | None = None,
     ):
         self.detector = detector or FaceDetector()
         self.aligner = aligner or FaceAligner()
         self.embedder = embedder or FaceEmbedder()
         self.matcher = matcher or FaceMatcher()
         self.recognition = recognition
+        self.enrollment = enrollment
 
     def detect_faces(self, image_data: str) -> FaceDetectionResponse:
         image = decode_base64_image(image_data)
@@ -42,17 +45,17 @@ class FacePipeline:
         return FaceDetectionResponse(faces=faces)
 
     def enroll(self, image_data: str) -> FaceEnrollResponse:
-        image = decode_base64_image(image_data)
-        face = self.detector.require_single_face(image, check_quality=True)
-        self.aligner.align(image, face)
-        embedding = self.embedder.embed(image, face)
+        if self.enrollment is not None:
+            return self.enrollment.enroll(image_data)
 
-        return FaceEnrollResponse(
-            embedding=embedding,
-            dimension=len(embedding),
-            bbox=face.bbox,
-            confidence=face.confidence,
+        service = EnrollmentService(
+            engine=self.detector.engine,
+            detector=self.detector,
+            aligner=self.aligner,
+            embedder=self.embedder,
+            settings=self.embedder.settings,
         )
+        return service.enroll(image_data)
 
     def recognize(
         self,
