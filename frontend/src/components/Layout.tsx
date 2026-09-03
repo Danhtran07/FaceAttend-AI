@@ -347,49 +347,49 @@ const isUsersActive =
     Attendance
   </span>
 </Link>
-{/* Users */}
-
-<Link
-  to="/users"
-  onClick={closeMobileMenu}
-  className={`
-    mb-1
-    flex items-center
-    gap-3
-    rounded-xl
-    px-3.5 py-3
-    text-sm font-semibold
-    no-underline
-    transition
-
-    ${
-      isUsersActive
-        ? "bg-blue-50 text-blue-600"
-        : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
-    }
-  `}
->
-  <span
+{role === "ADMIN" && (
+  <Link
+    to="/users"
+    onClick={closeMobileMenu}
     className={`
-      flex h-9 w-9
-      items-center justify-center
-      rounded-lg
-      text-lg
+      mb-1
+      flex items-center
+      gap-3
+      rounded-xl
+      px-3.5 py-3
+      text-sm font-semibold
+      no-underline
+      transition
 
       ${
         isUsersActive
-          ? "bg-white text-blue-600 shadow-sm"
-          : "bg-slate-100 text-slate-500"
+          ? "bg-blue-50 text-blue-600"
+          : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
       }
     `}
   >
-    ♙
-  </span>
+    <span
+      className={`
+        flex h-9 w-9
+        items-center justify-center
+        rounded-lg
+        text-lg
 
-  <span>
-    Users
-  </span>
-</Link>
+        ${
+          isUsersActive
+            ? "bg-white text-blue-600 shadow-sm"
+            : "bg-slate-100 text-slate-500"
+        }
+      `}
+    >
+      ♙
+    </span>
+
+    <span>
+      Users
+    </span>
+  </Link>
+)}
         </nav>
 
 
