@@ -37,6 +37,22 @@ Shared service: `FaceEmbeddingService.generate_embedding(aligned_face)`.
 
 InsightFace ArcFace is used in production. No random vectors.
 
+## AI-04 Face Matching
+
+Shared service: `FaceMatchingService` (`app/services/face_matcher.py`).
+
+| ID | Test Case | Expected Result |
+|----|-----------|-----------------|
+| TC01 | Known face | `recognized=true`, correct `employee_id` |
+| TC02 | Unknown face | `recognized=false`, `employee_id=null` |
+| TC03 | Threshold pass | Match when similarity ≥ threshold |
+| TC04 | Threshold fail | `recognized=false` / `UNKNOWN_FACE` |
+| TC05 | Empty candidates | `recognized=false`, confidence `0.0` |
+| TC06 | Invalid embedding | `INVALID_IMAGE` |
+| TC07 | Best match selection | Highest cosine similarity wins |
+
+Backend supplies candidates. AI Service does not access the database.
+
 ---
 
 ## Summary

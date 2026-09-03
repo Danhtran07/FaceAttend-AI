@@ -105,3 +105,24 @@ Embedding (float32, L2-normalized)
 - **Normalization:** L2 so cosine similarity is a dot product. The same aligned-face preprocessing is used for enrollment and recognition.
 - **Backend responsibility:** AI Service only returns `{ "embedding": [...] }`. Backend stores the vector in the database. AI Service does not import SQLAlchemy, PostgreSQL, or backend ORM models.
 
+AI-04 Face Matching is implemented as `FaceMatchingService`:
+
+```
+Query Embedding
+      ↓
+Compare Candidates (from Backend)
+      ↓
+Cosine Similarity
+      ↓
+Best Match
+      ↓
+Threshold (FACE_MATCH_THRESHOLD)
+      ↓
+Employee ID / Unknown
+```
+
+- **No database access:** Backend loads embeddings from PostgreSQL and sends `candidates` to AI Service (`POST /face/match` or via `/face/recognize`).
+- **Metric:** Cosine similarity on L2-normalized vectors.
+- **Threshold:** configurable via `FACE_MATCH_THRESHOLD` (default `0.5`). Below threshold → `recognized=false`, `employee_id=null`, or `UNKNOWN_FACE`.
+- **Output:** `{ "recognized": true/false, "employee_id": ..., "confidence": ... }`
+

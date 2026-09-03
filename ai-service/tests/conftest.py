@@ -27,6 +27,7 @@ def settings():
     return Settings(
         detection_threshold=0.5,
         recognition_threshold=0.5,
+        face_match_threshold=0.5,
         min_face_size=20,
         min_blur_variance=10.0,
         embedding_dim=4,

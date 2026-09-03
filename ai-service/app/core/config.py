@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_name: str = "buffalo_l"
     detection_threshold: float = 0.5
     recognition_threshold: float = 0.5
+    face_match_threshold: float = 0.5
     min_face_size: int = 40
     min_blur_variance: float = 50.0
     embedding_dim: int = 512

@@ -20,9 +20,9 @@ class FacePipeline:
     """Shared Detection → Alignment → Embedding → Matching pipeline.
 
     Enrollment and recognition use the same FaceAlignmentService
-    and FaceEmbeddingService.
-
+    and FaceEmbeddingService. Matching uses Backend-supplied candidates only.
     """
+
     def __init__(
         self,
         detector: FaceDetector | None = None,

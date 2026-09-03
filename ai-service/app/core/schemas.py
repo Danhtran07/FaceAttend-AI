@@ -28,9 +28,39 @@ class RegisteredEmbedding(BaseModel):
     embedding: list[float]
 
 
+class MatchCandidate(BaseModel):
+    """Embedding candidate supplied by Backend (from PostgreSQL)."""
+
+    employee_id: int
+    embedding: list[float]
+
+
+class MatchResult(BaseModel):
+    recognized: bool
+    employee_id: int | None = None
+    confidence: float | None = None
+
+
+class FaceMatchRequest(BaseModel):
+    """Backend → AI matching contract. AI never loads embeddings from DB."""
+
+    query_embedding: list[float]
+    candidates: list[MatchCandidate] = Field(default_factory=list)
+    threshold: float | None = Field(None, ge=0.0, le=1.0)
+
+
+class FaceMatchResponse(BaseModel):
+    recognized: bool
+    employee_id: int | None = None
+    confidence: float | None = None
+
+
 class FaceRecognizeRequest(BaseModel):
     image: str = Field(..., description="Base64-encoded image")
-    registered_embeddings: list[RegisteredEmbedding] = Field(default_factory=list)
+    registered_embeddings: list[RegisteredEmbedding] = Field(
+        default_factory=list,
+        description="Candidates fetched by Backend from PostgreSQL",
+    )
     threshold: float | None = Field(None, ge=0.0, le=1.0)
 
 
