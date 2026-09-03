@@ -1,11 +1,10 @@
-# FaceAttend AI
+# FaceAttend
 
 ## Project Overview
 
-AI-powered Face Recognition Attendance System.
+Face Recognition Attendance System.
 
 ## Team
-
 - Khoa — AI Engineer
 - Danh — Backend Engineer
 - Tín — Frontend Engineer
@@ -20,24 +19,18 @@ Backend:
 - FastAPI
 - Python
 
-AI:
-- InsightFace
-- SCRFD
-- ArcFace
-
 Database:
 - PostgreSQL
 
 ## Project Structure
 
-This repository is a monorepo with three main services:
+This repository is a monorepo with two main services:
 
 - `backend/` — FastAPI backend service (Danh)
-- `ai-service/` — AI model service (Khoa)
 - `frontend/` — Vite + React frontend (Tín)
-- `database/` — database migrations and schema
 
-Each service contains a minimal skeleton and a `/health` endpoint.
+The backend contains the API, authentication, database migrations, and health
+endpoint.
 
 ## Run With Docker (recommended)
 
@@ -55,7 +48,6 @@ The services are available at:
 
 - Backend: http://localhost:8000
 - Backend health: http://localhost:8000/health
-- AI service health: http://localhost:8002/health
 
 Run the frontend in a second terminal:
 
@@ -89,9 +81,8 @@ docker compose logs -f backend
 docker compose down
 ```
 
-If ports `8000` or `8002` are already in use, change `BACKEND_PORT` or
-`AI_SERVICE_HOST_PORT` in `.env`. Do not change the internal Docker values
-`POSTGRES_HOST=postgres`, `DATABASE_URL`, or `AI_SERVICE_URL`.
+If port `8000` is already in use, change `BACKEND_PORT` in `.env`. Do not change
+the internal Docker values `POSTGRES_HOST=postgres` or `DATABASE_URL`.
 
 ## Run Services Without Docker
 
@@ -105,13 +96,6 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 In another terminal:
-
-```
-cd ai-service
-uvicorn app.main:app --reload --port 8001
-```
-
-In a third terminal:
 
 ```
 cd frontend
