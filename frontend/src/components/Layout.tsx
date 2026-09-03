@@ -49,6 +49,16 @@ export default function Layout() {
       "/employees"
     );
 
+  const isAttendanceActive =
+  location.pathname.startsWith(
+    "/attendance"
+  );
+
+const isUsersActive =
+  location.pathname.startsWith(
+    "/users"
+  );
+
   function handleLogout() {
     localStorage.removeItem(
       "access_token"
@@ -294,7 +304,92 @@ export default function Layout() {
             </span>
 
           </Link>
+{/* Attendance */}
 
+<Link
+  to="/attendance"
+  onClick={closeMobileMenu}
+  className={`
+    mb-1
+    flex items-center
+    gap-3
+    rounded-xl
+    px-3.5 py-3
+    text-sm font-semibold
+    no-underline
+    transition
+
+    ${
+      isAttendanceActive
+        ? "bg-blue-50 text-blue-600"
+        : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
+    }
+  `}
+>
+  <span
+    className={`
+      flex h-9 w-9
+      items-center justify-center
+      rounded-lg
+      text-lg
+
+      ${
+        isAttendanceActive
+          ? "bg-white text-blue-600 shadow-sm"
+          : "bg-slate-100 text-slate-500"
+      }
+    `}
+  >
+    ✓
+  </span>
+
+  <span>
+    Attendance
+  </span>
+</Link>
+{/* Users */}
+
+<Link
+  to="/users"
+  onClick={closeMobileMenu}
+  className={`
+    mb-1
+    flex items-center
+    gap-3
+    rounded-xl
+    px-3.5 py-3
+    text-sm font-semibold
+    no-underline
+    transition
+
+    ${
+      isUsersActive
+        ? "bg-blue-50 text-blue-600"
+        : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
+    }
+  `}
+>
+  <span
+    className={`
+      flex h-9 w-9
+      items-center justify-center
+      rounded-lg
+      text-lg
+
+      ${
+        isUsersActive
+          ? "bg-white text-blue-600 shadow-sm"
+          : "bg-slate-100 text-slate-500"
+      }
+    `}
+  >
+    ♙
+  </span>
+
+  <span>
+    Users
+  </span>
+</Link>
         </nav>
 
 

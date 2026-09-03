@@ -8,19 +8,31 @@ import {
 import Login from "./Login";
 import Dashboard from "./Dashboard";
 import Employees from "./Employees";
+import Users from "./Users";
+import Attendance from "./Attendance";
 
 import Layout from "../components/Layout";
 import ProtectedRoute from "../components/ProtectedRoute";
+import AdminRoute from "../components/AdminRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
+        {/* =========================
+            PUBLIC ROUTES
+        ========================= */}
+
         <Route
           path="/login"
           element={<Login />}
         />
+
+
+        {/* =========================
+            PROTECTED ROUTES
+        ========================= */}
 
         <Route element={<ProtectedRoute />}>
 
@@ -36,9 +48,28 @@ export default function App() {
               element={<Employees />}
             />
 
+            <Route
+              path="/attendance"
+              element={<Attendance />}
+            />
+
+            <Route
+              path="/users"
+              element={
+                <AdminRoute>
+                  <Users />
+                </AdminRoute>
+              }
+            />
+
           </Route>
 
         </Route>
+
+
+        {/* =========================
+            DEFAULT ROUTE
+        ========================= */}
 
         <Route
           path="/"
@@ -49,6 +80,11 @@ export default function App() {
             />
           }
         />
+
+
+        {/* =========================
+            404
+        ========================= */}
 
         <Route
           path="*"
