@@ -10,6 +10,22 @@ pip install -r requirements.txt
 pytest -v
 ```
 
+## AI-02 Face Alignment
+
+Shared service: `FaceAlignmentService` (`app/services/face_aligner.py`).
+
+| ID | Test Case | Expected Result |
+|----|-----------|-----------------|
+| AL-01 | Valid 5-point landmarks | Aligned face shape `(112, 112, 3)` |
+| AL-02 | Missing landmarks | `MODEL_ERROR` |
+| AL-03 | Invalid landmark count/values | `INVALID_IMAGE` |
+| AL-04 | Invalid face image | `INVALID_IMAGE` |
+| AL-05 | Output shape | Always `aligned_face_size x aligned_face_size x 3` |
+
+Enrollment and Recognition both call `FaceAligner` → `FaceAlignmentService`. No separate pipelines.
+
+---
+
 ## Summary
 
 | Metric | Value |

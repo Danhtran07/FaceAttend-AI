@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-import cv2
 import numpy as np
 
 from app.core.config import Settings, get_settings
@@ -81,14 +80,13 @@ class FaceEngine:
             bbox = face.bbox.astype(float).tolist()
             landmarks = getattr(face, "kps", None)
             embedding = getattr(face, "embedding", None)
-            aligned_face = self._align_face(image, landmarks) if landmarks is not None else None
 
             results.append(
                 FaceDetectionResult(
                     bbox=bbox,
                     confidence=score,
                     landmarks=landmarks,
-                    aligned_face=aligned_face,
+                    aligned_face=None,
                     embedding=embedding,
                 )
             )
@@ -97,21 +95,9 @@ class FaceEngine:
         return results
 
     def _align_face(self, image: np.ndarray, landmarks: np.ndarray) -> np.ndarray:
-        try:
-            from insightface.utils import face_align
+        from app.services.face_aligner import FaceAlignmentService
 
-            aligned = face_align.norm_crop(
-                image,
-                landmarks,
-                image_size=self.settings.aligned_face_size,
-            )
-            return aligned
-        except Exception as exc:
-            raise AIServiceError(
-                ErrorCode.MODEL_ERROR,
-                f"Face alignment failed: {exc}",
-                status_code=500,
-            ) from exc
+        return FaceAlignmentService(settings=self.settings).align(image, landmarks)
 
     def get_embedding(self, image: np.ndarray, face: FaceDetectionResult) -> np.ndarray:
         if face.embedding is not None:

@@ -73,4 +73,18 @@ docker compose up --build
 
 ## Current Status
 
-Project initialization / MVP development. Health endpoints implemented; business logic to follow in later tasks.
+AI-01 Face Detection is implemented in `ai-service`.
+
+AI-02 Face Alignment is implemented as a shared `FaceAlignmentService`:
+
+```
+Detected Face
+      ↓
+Facial Landmarks (InsightFace / SCRFD, 5-point)
+      ↓
+Alignment (ArcFace 112x112)
+      ↓
+Aligned Face
+```
+
+Enrollment and Recognition reuse this same alignment service. The AI service does not access the database.

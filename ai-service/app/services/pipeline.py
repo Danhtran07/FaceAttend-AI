@@ -17,6 +17,10 @@ from app.utils.image import decode_base64_image
 
 
 class FacePipeline:
+    """Shared Detection → Alignment → Embedding → Matching pipeline.
+
+    Enrollment and recognition use the same FaceAlignmentService.
+    """
     def __init__(
         self,
         detector: FaceDetector | None = None,
