@@ -88,3 +88,20 @@ Aligned Face
 ```
 
 Enrollment and Recognition reuse this same alignment service. The AI service does not access the database.
+
+AI-03 Face Embedding is implemented as `FaceEmbeddingService`:
+
+```
+Aligned Face (112x112)
+      ↓
+ArcFace (InsightFace buffalo_l recognition model)
+      ↓
+Embedding (float32, L2-normalized)
+```
+
+- **Model:** pretrained InsightFace ArcFace. No custom training. No random or fake vectors.
+- **Dimension:** taken from the recognition model; buffalo_l uses **512**.
+- **dtype:** `float32`.
+- **Normalization:** L2 so cosine similarity is a dot product. The same aligned-face preprocessing is used for enrollment and recognition.
+- **Backend responsibility:** AI Service only returns `{ "embedding": [...] }`. Backend stores the vector in the database. AI Service does not import SQLAlchemy, PostgreSQL, or backend ORM models.
+

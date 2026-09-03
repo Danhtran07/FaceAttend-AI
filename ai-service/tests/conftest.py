@@ -87,8 +87,9 @@ def mock_engine(mock_face):
             return list(self._faces)
 
         def get_embedding(self, image, face):
-            if face.embedding is not None:
-                return face.embedding
+            return self.extract_embedding(face.aligned_face)
+
+        def extract_embedding(self, aligned_face):
             return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
     return MockEngine()

@@ -24,6 +24,19 @@ Shared service: `FaceAlignmentService` (`app/services/face_aligner.py`).
 
 Enrollment and Recognition both call `FaceAligner` → `FaceAlignmentService`. No separate pipelines.
 
+## AI-03 Face Embedding
+
+Shared service: `FaceEmbeddingService.generate_embedding(aligned_face)`.
+
+| ID | Test Case | Expected Result |
+|----|-----------|-----------------|
+| EM-01 | Invalid / empty aligned face | `INVALID_IMAGE` |
+| EM-02 | Embedding shape | `(512,)` for buffalo_l |
+| EM-03 | dtype | `float32` |
+| EM-04 | L2 normalization | `norm == 1` |
+
+InsightFace ArcFace is used in production. No random vectors.
+
 ---
 
 ## Summary

@@ -99,46 +99,73 @@ class FaceEngine:
 
         return FaceAlignmentService(settings=self.settings).align(image, landmarks)
 
-    def get_embedding(self, image: np.ndarray, face: FaceDetectionResult) -> np.ndarray:
-        if face.embedding is not None:
-            return self._normalize_embedding(face.embedding)
-
-        if face.aligned_face is None:
-            if face.landmarks is None:
-                raise AIServiceError(
-                    ErrorCode.MODEL_ERROR,
-                    "Cannot compute embedding without landmarks",
-                    status_code=500,
-                )
-            face.aligned_face = self._align_face(image, face.landmarks)
-
+    def extract_embedding(self, aligned_face: np.ndarray) -> np.ndarray:
+        """Run InsightFace ArcFace on an already aligned face. No persistence."""
         try:
             app = self._get_app()
             rec_model = app.models.get("recognition")
             if rec_model is None:
                 raise AIServiceError(
                     ErrorCode.MODEL_ERROR,
-                    "Recognition model not available",
+                    "InsightFace ArcFace recognition model is not available",
                     status_code=500,
                 )
-            embedding = rec_model.get_feat(face.aligned_face)
-            return self._normalize_embedding(embedding)
+            feature = rec_model.get_feat(aligned_face)
         except AIServiceError:
             raise
         except Exception as exc:
             raise AIServiceError(
                 ErrorCode.MODEL_ERROR,
-                f"Embedding extraction failed: {exc}",
+                f"ArcFace embedding extraction failed: {exc}",
                 status_code=500,
             ) from exc
 
-    @staticmethod
-    def _normalize_embedding(embedding: np.ndarray) -> np.ndarray:
-        vector = np.asarray(embedding, dtype=np.float32).flatten()
-        norm = np.linalg.norm(vector)
-        if norm > 0:
-            vector = vector / norm
+        vector = np.asarray(feature, dtype=np.float32).flatten()
+        if vector.size == 0:
+            raise AIServiceError(
+                ErrorCode.MODEL_ERROR,
+                "ArcFace returned an empty embedding",
+                status_code=500,
+            )
+        self._model_embedding_dim = int(vector.shape[0])
         return vector
+
+    def model_embedding_dim(self) -> int:
+        """Embedding length reported by the InsightFace recognition model."""
+        cached = getattr(self, "_model_embedding_dim", None)
+        if isinstance(cached, int) and cached > 0:
+            return cached
+
+        try:
+            app = self._get_app()
+            rec_model = app.models.get("recognition")
+            if rec_model is not None and hasattr(rec_model, "session"):
+                output_shape = rec_model.session.get_outputs()[0].shape
+                dim = output_shape[-1]
+                if isinstance(dim, int) and dim > 0:
+                    self._model_embedding_dim = dim
+                    return dim
+        except AIServiceError:
+            raise
+        except Exception:
+            pass
+
+        return int(self.settings.embedding_dim)
+
+    def get_embedding(self, image: np.ndarray, face: FaceDetectionResult) -> np.ndarray:
+        from app.services.face_embedder import FaceEmbeddingService
+
+        if face.aligned_face is None:
+            if face.landmarks is None:
+                raise AIServiceError(
+                    ErrorCode.MODEL_ERROR,
+                    "Cannot compute embedding without an aligned face",
+                    status_code=500,
+                )
+            face.aligned_face = self._align_face(image, face.landmarks)
+
+        service = FaceEmbeddingService(engine=self, settings=self.settings)
+        return service.generate_embedding(face.aligned_face)
 
 
 _engine: FaceEngine | None = None
