@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.core.config import Settings, get_settings
-from app.core.errors import AIServiceError, ErrorCode
+from app.core.errors import InvalidEmbeddingError, UnknownFaceError
 from app.core.schemas import MatchCandidate, MatchResult
 
 
@@ -51,15 +51,13 @@ class FaceMatchingService:
                 field=f"candidates[{item.employee_id}].embedding",
             )
             if candidate.shape != query.shape:
-                raise AIServiceError(
-                    ErrorCode.INVALID_EMBEDDING,
+                raise InvalidEmbeddingError(
                     "Candidate embedding dimension mismatch",
                     details={
                         "employee_id": item.employee_id,
                         "expected": int(query.shape[0]),
                         "actual": int(candidate.shape[0]),
                     },
-                    status_code=400,
                 )
 
             similarity = self.cosine_similarity(query, candidate)
@@ -91,11 +89,7 @@ class FaceMatchingService:
         """Same as ``match``, but raise UNKNOWN_FACE when not recognized."""
         result = self.match(query_embedding, candidates, threshold=threshold)
         if not result.recognized:
-            raise AIServiceError(
-                ErrorCode.UNKNOWN_FACE,
-                details={"best_similarity": result.confidence},
-                status_code=404,
-            )
+            raise UnknownFaceError(details={"best_similarity": result.confidence})
         return result
 
     @staticmethod
@@ -105,11 +99,9 @@ class FaceMatchingService:
     def _resolve_threshold(self, threshold: float | None) -> float:
         value = self.threshold if threshold is None else float(threshold)
         if value < 0.0 or value > 1.0:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
+            raise InvalidEmbeddingError(
                 "Match threshold must be between 0 and 1",
                 details={"threshold": value},
-                status_code=400,
             )
         return value
 
@@ -120,43 +112,25 @@ class FaceMatchingService:
         field: str,
     ) -> np.ndarray:
         if embedding is None:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
-                f"{field} is required",
-                status_code=400,
-            )
+            raise InvalidEmbeddingError(f"{field} is required")
 
         try:
             vector = np.asarray(embedding, dtype=np.float32).flatten()
         except Exception as exc:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
-                f"{field} is not a valid numeric embedding",
-                status_code=400,
-            ) from exc
+            raise InvalidEmbeddingError(f"{field} is not a valid numeric embedding") from exc
 
         if vector.size == 0:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
-                f"{field} is empty",
-                status_code=400,
-            )
+            raise InvalidEmbeddingError(f"{field} is empty")
 
         expected = int(self.settings.embedding_dim)
         if expected > 0 and vector.shape[0] != expected:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
+            raise InvalidEmbeddingError(
                 f"{field} has unexpected dimension",
                 details={"expected": expected, "actual": int(vector.shape[0])},
-                status_code=400,
             )
 
         if not np.isfinite(vector).all():
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
-                f"{field} contains NaN or Inf",
-                status_code=400,
-            )
+            raise InvalidEmbeddingError(f"{field} contains NaN or Inf")
 
         return self._normalize(vector)
 
@@ -164,11 +138,7 @@ class FaceMatchingService:
     def _normalize(vector: np.ndarray) -> np.ndarray:
         norm = float(np.linalg.norm(vector))
         if norm == 0:
-            raise AIServiceError(
-                ErrorCode.INVALID_EMBEDDING,
-                "Embedding is a zero vector",
-                status_code=400,
-            )
+            raise InvalidEmbeddingError("Embedding is a zero vector")
         return vector / np.float32(norm)
 
 

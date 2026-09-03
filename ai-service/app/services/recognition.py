@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.config import Settings, get_settings
-from app.core.errors import AIServiceError, ErrorCode
+from app.core.errors import UnknownFaceError
 from app.core.schemas import FaceRecognizeResponse, MatchCandidate
 from app.services.face_aligner import FaceAligner
 from app.services.face_detector import FaceDetector
@@ -56,14 +56,12 @@ class RecognitionService:
         result = self.matching.match(embedding, candidates, threshold=threshold)
 
         if not result.recognized:
-            raise AIServiceError(
-                ErrorCode.UNKNOWN_FACE,
+            raise UnknownFaceError(
                 details={
                     "recognized": False,
                     "employee_id": None,
                     "confidence": result.confidence,
                 },
-                status_code=404,
             )
 
         return FaceRecognizeResponse(

@@ -114,6 +114,6 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     success: bool = False
-    embedding: None = None
     error_code: str
-    error: ErrorDetail
+    message: str
+    details: dict[str, Any] | None = None

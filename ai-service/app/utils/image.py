@@ -6,18 +6,14 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from app.core.errors import AIServiceError, ErrorCode
+from app.core.errors import InvalidImageError
 
 BASE64_DATA_URI_PATTERN = re.compile(r"^data:image/[\w+.-]+;base64,")
 
 
 def decode_base64_image(image_data: str) -> np.ndarray:
     if not image_data or not image_data.strip():
-        raise AIServiceError(
-            ErrorCode.INVALID_IMAGE,
-            "Image data is empty",
-            status_code=400,
-        )
+        raise InvalidImageError("Image data is empty")
 
     try:
         cleaned = BASE64_DATA_URI_PATTERN.sub("", image_data.strip())
@@ -28,27 +24,19 @@ def decode_base64_image(image_data: str) -> np.ndarray:
         pil_image = Image.open(BytesIO(raw_bytes))
         pil_image = pil_image.convert("RGB")
         image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-    except Exception as exc:
-        raise AIServiceError(
-            ErrorCode.INVALID_IMAGE,
-            f"Failed to decode image: {exc}",
-            status_code=400,
-        ) from exc
+    except InvalidImageError:
+        raise
+    except Exception:
+        raise InvalidImageError("Failed to decode image") from None
 
     if image is None or image.size == 0:
-        raise AIServiceError(
-            ErrorCode.INVALID_IMAGE,
-            "Decoded image is empty",
-            status_code=400,
-        )
+        raise InvalidImageError("Decoded image is empty")
 
     height, width = image.shape[:2]
     if height < 32 or width < 32:
-        raise AIServiceError(
-            ErrorCode.INVALID_IMAGE,
+        raise InvalidImageError(
             "Image dimensions are too small",
             details={"width": width, "height": height},
-            status_code=400,
         )
 
     return image

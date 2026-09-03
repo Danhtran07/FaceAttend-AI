@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.api.face import router as face_router
 from app.api.health import router as health_router
-from app.core.errors import AIServiceError, ai_service_error_handler
+from app.core.errors import register_exception_handlers
 
 app = FastAPI(
     title="FaceAttend AI Service",
@@ -10,7 +10,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_exception_handler(AIServiceError, ai_service_error_handler)
+register_exception_handlers(app)
 
 app.include_router(health_router)
 app.include_router(face_router)

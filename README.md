@@ -176,19 +176,17 @@ Backend loads embeddings from PostgreSQL and sends them as `candidates`. AI Serv
 }
 ```
 
-**Unknown response** (HTTP 404, error code `UNKNOWN_FACE`)
+**Unknown response** (HTTP 404)
 
 ```json
 {
   "success": false,
-  "error": {
-    "code": "UNKNOWN_FACE",
-    "message": "Face not recognized among registered employees",
-    "details": {
-      "recognized": false,
-      "employee_id": null,
-      "confidence": 0.31
-    }
+  "error_code": "UNKNOWN_FACE",
+  "message": "No matching employee",
+  "details": {
+    "recognized": false,
+    "employee_id": null,
+    "confidence": 0.31
   }
 }
 ```
@@ -240,18 +238,14 @@ Backend → PostgreSQL
 }
 ```
 
-**Failure** (shared AI error shape; ready for AI-07)
+**Failure**
 
 ```json
 {
   "success": false,
-  "embedding": null,
   "error_code": "NO_FACE",
-  "error": {
-    "code": "NO_FACE",
-    "message": "No face detected in the image",
-    "details": {}
-  }
+  "message": "No face detected",
+  "details": null
 }
 ```
 
@@ -259,4 +253,30 @@ Backend → PostgreSQL
 - Exactly one face required (`0 → NO_FACE`, `>1 → MULTIPLE_FACES`).
 - AI Service does **not** create/update employees or write to the database.
 - **Backend responsibility:** persist the returned embedding in PostgreSQL and link it to the employee record.
+
+AI-07 AI Error Handling:
+
+Centralized FastAPI exception handling (`app/core/errors.py`) returns a uniform payload for `/face/enroll`, `/face/recognize`, and other AI routes:
+
+```json
+{
+  "success": false,
+  "error_code": "NO_FACE",
+  "message": "No face detected",
+  "details": null
+}
+```
+
+| Error | Meaning |
+| ----- | ------- |
+| NO_FACE | No face detected |
+| MULTIPLE_FACES | Multiple faces detected |
+| UNKNOWN_FACE | No matching employee |
+| INVALID_IMAGE | Invalid image |
+| LOW_QUALITY | Poor face quality |
+| MODEL_ERROR | Model inference error |
+| INVALID_EMBEDDING | Invalid embedding |
+| INVALID_REQUEST | Invalid request |
+
+Responses never include stack traces, raw images, full embeddings, secrets, JWT, or database connection details. Server logs keep request path/method and error code for debugging without logging sensitive payloads.
 

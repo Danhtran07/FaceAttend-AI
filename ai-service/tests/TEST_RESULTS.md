@@ -82,6 +82,23 @@ Orchestration: Detector → Alignment → Embedding → Matching. Models loaded 
 
 Backend stores the embedding. AI Service does not access PostgreSQL.
 
+## AI-07 Error Handling
+
+Centralized `AIServiceError` hierarchy + FastAPI handlers.
+
+| Error | HTTP | Meaning |
+| ----- | ---- | ------- |
+| NO_FACE | 400 | No face detected |
+| MULTIPLE_FACES | 400 | Multiple faces detected |
+| UNKNOWN_FACE | 404 | No matching employee |
+| INVALID_IMAGE | 400 | Invalid image |
+| LOW_QUALITY | 400 | Poor face quality |
+| MODEL_ERROR | 500 | Model inference error |
+| INVALID_EMBEDDING | 400 | Invalid embedding |
+| INVALID_REQUEST | 422 | Invalid request |
+
+Standard body: `{ success, error_code, message, details }`.
+
 ---
 
 ## Summary

@@ -53,20 +53,21 @@ def test_enroll_api(client, sample_image_b64, monkeypatch):
 
 def test_enroll_api_no_face_error_format(client, sample_image_b64, monkeypatch):
     from app.api import face as face_api
-    from app.core.errors import AIServiceError, ErrorCode
+    from app.core.errors import NoFaceError
 
-    def raise_no_face(*args, **kwargs):
-        raise AIServiceError(ErrorCode.NO_FACE, status_code=400)
-
-    monkeypatch.setattr(face_api.enrollment_service, "enroll", raise_no_face)
+    monkeypatch.setattr(
+        face_api.enrollment_service,
+        "enroll",
+        lambda image: (_ for _ in ()).throw(NoFaceError()),
+    )
 
     response = client.post("/face/enroll", json={"image": sample_image_b64})
     assert response.status_code == 400
     data = response.json()
     assert data["success"] is False
-    assert data["embedding"] is None
     assert data["error_code"] == ErrorCode.NO_FACE.value
-    assert data["error"]["code"] == ErrorCode.NO_FACE.value
+    assert data["message"]
+    assert "error" not in data or "code" not in data.get("error", {})
 
 
 def test_recognize_api_known(client, sample_image_b64, monkeypatch):
@@ -102,20 +103,21 @@ def test_recognize_api_known(client, sample_image_b64, monkeypatch):
 
 def test_recognize_api_unknown(client, sample_image_b64, monkeypatch):
     from app.api import face as face_api
-    from app.core.errors import AIServiceError, ErrorCode
+    from app.core.errors import UnknownFaceError
 
-    def raise_unknown(*args, **kwargs):
-        raise AIServiceError(
-            ErrorCode.UNKNOWN_FACE,
-            details={
-                "recognized": False,
-                "employee_id": None,
-                "confidence": 0.31,
-            },
-            status_code=404,
-        )
-
-    monkeypatch.setattr(face_api.recognition_service, "recognize", raise_unknown)
+    monkeypatch.setattr(
+        face_api.recognition_service,
+        "recognize",
+        lambda *a, **k: (_ for _ in ()).throw(
+            UnknownFaceError(
+                details={
+                    "recognized": False,
+                    "employee_id": None,
+                    "confidence": 0.31,
+                }
+            )
+        ),
+    )
 
     response = client.post(
         "/face/recognize",
@@ -128,10 +130,10 @@ def test_recognize_api_unknown(client, sample_image_b64, monkeypatch):
     )
     assert response.status_code == 404
     data = response.json()
-    assert data["error"]["code"] == ErrorCode.UNKNOWN_FACE.value
-    assert data["error"]["details"]["recognized"] is False
-    assert data["error"]["details"]["employee_id"] is None
-    assert data["error"]["details"]["confidence"] == 0.31
+    assert data["error_code"] == ErrorCode.UNKNOWN_FACE.value
+    assert data["details"]["recognized"] is False
+    assert data["details"]["employee_id"] is None
+    assert data["details"]["confidence"] == 0.31
 
 
 def test_recognize_api_invalid_image(client, invalid_image_b64):
@@ -140,7 +142,7 @@ def test_recognize_api_invalid_image(client, invalid_image_b64):
         json={"image": invalid_image_b64, "candidates": []},
     )
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == ErrorCode.INVALID_IMAGE.value
+    assert response.json()["error_code"] == ErrorCode.INVALID_IMAGE.value
 
 
 def test_invalid_image_error(client, invalid_image_b64):
@@ -148,4 +150,4 @@ def test_invalid_image_error(client, invalid_image_b64):
     assert response.status_code == 400
     data = response.json()
     assert data["success"] is False
-    assert data["error"]["code"] == ErrorCode.INVALID_IMAGE.value
+    assert data["error_code"] == ErrorCode.INVALID_IMAGE.value

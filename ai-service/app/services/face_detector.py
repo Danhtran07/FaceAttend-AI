@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.core.config import Settings, get_settings
-from app.core.errors import AIServiceError, ErrorCode
+from app.core.errors import NoFaceError, MultipleFacesError, LowQualityError
 from app.core.schemas import DetectedFace
 from app.services.face_engine import FaceDetectionResult, FaceEngine, get_face_engine
 from app.utils.image import compute_blur_variance, compute_face_size
@@ -33,14 +33,10 @@ class FaceDetector:
         faces = self.engine.detect(image)
 
         if not faces:
-            raise AIServiceError(ErrorCode.NO_FACE, status_code=400)
+            raise NoFaceError()
 
         if len(faces) > 1:
-            raise AIServiceError(
-                ErrorCode.MULTIPLE_FACES,
-                details={"face_count": len(faces)},
-                status_code=400,
-            )
+            raise MultipleFacesError(details={"face_count": len(faces)})
 
         face = faces[0]
         if check_quality:
@@ -57,14 +53,10 @@ class FaceDetector:
         faces = self.engine.detect(image)
 
         if not faces:
-            raise AIServiceError(ErrorCode.NO_FACE, status_code=400)
+            raise NoFaceError()
 
         if len(faces) > 1 and not self.settings.allow_multiple_faces_recognition:
-            raise AIServiceError(
-                ErrorCode.MULTIPLE_FACES,
-                details={"face_count": len(faces)},
-                status_code=400,
-            )
+            raise MultipleFacesError(details={"face_count": len(faces)})
 
         face = faces[0]
         if check_quality:
@@ -82,43 +74,33 @@ class FaceDetector:
 
         face_crop = image[y1:y2, x1:x2]
         if face_crop.size == 0:
-            raise AIServiceError(
-                ErrorCode.LOW_QUALITY,
-                "Face crop is empty",
-                status_code=400,
-            )
+            raise LowQualityError("Face crop is empty")
 
         face_width = x2 - x1
         face_height = y2 - y1
         if min(face_width, face_height) < self.settings.min_face_size:
-            raise AIServiceError(
-                ErrorCode.LOW_QUALITY,
+            raise LowQualityError(
                 "Face is too small in the image",
                 details={
                     "face_width": face_width,
                     "face_height": face_height,
                     "min_face_size": self.settings.min_face_size,
                 },
-                status_code=400,
             )
 
         blur_variance = compute_blur_variance(face_crop)
         if blur_variance < self.settings.min_blur_variance:
-            raise AIServiceError(
-                ErrorCode.LOW_QUALITY,
+            raise LowQualityError(
                 "Face image is too blurry",
                 details={
                     "blur_variance": round(blur_variance, 2),
                     "min_blur_variance": self.settings.min_blur_variance,
                 },
-                status_code=400,
             )
 
         face_area_ratio = compute_face_size(face.bbox) / float(width * height)
         if face_area_ratio < 0.01:
-            raise AIServiceError(
-                ErrorCode.LOW_QUALITY,
+            raise LowQualityError(
                 "Face occupies too little of the image",
                 details={"face_area_ratio": round(face_area_ratio, 4)},
-                status_code=400,
             )
