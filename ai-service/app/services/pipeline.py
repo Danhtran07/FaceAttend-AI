@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import numpy as np
-
-from app.core.errors import AIServiceError, ErrorCode
 from app.core.schemas import (
     FaceDetectionResponse,
     FaceEnrollResponse,
     FaceRecognizeResponse,
+    MatchCandidate,
     RegisteredEmbedding,
 )
 from app.services.face_aligner import FaceAligner
 from app.services.face_detector import FaceDetector
 from app.services.face_embedder import FaceEmbedder
 from app.services.face_matcher import FaceMatcher
+from app.services.recognition import RecognitionService
 from app.utils.image import decode_base64_image
 
 
@@ -29,11 +28,13 @@ class FacePipeline:
         aligner: FaceAligner | None = None,
         embedder: FaceEmbedder | None = None,
         matcher: FaceMatcher | None = None,
+        recognition: RecognitionService | None = None,
     ):
         self.detector = detector or FaceDetector()
         self.aligner = aligner or FaceAligner()
         self.embedder = embedder or FaceEmbedder()
         self.matcher = matcher or FaceMatcher()
+        self.recognition = recognition
 
     def detect_faces(self, image_data: str) -> FaceDetectionResponse:
         image = decode_base64_image(image_data)
@@ -56,30 +57,25 @@ class FacePipeline:
     def recognize(
         self,
         image_data: str,
-        registered_embeddings: list[RegisteredEmbedding],
+        registered_embeddings: list[RegisteredEmbedding] | list[MatchCandidate],
         threshold: float | None = None,
     ) -> FaceRecognizeResponse:
-        image = decode_base64_image(image_data)
-        face = self.detector.select_primary_face(image, check_quality=True)
-        self.aligner.align(image, face)
-        embedding = self.embedder.embed(image, face)
+        candidates = [
+            item
+            if isinstance(item, MatchCandidate)
+            else MatchCandidate(employee_id=item.employee_id, embedding=item.embedding)
+            for item in registered_embeddings
+        ]
 
-        recognized, employee_id, confidence = self.matcher.match(
-            embedding,
-            registered_embeddings,
-            threshold=threshold,
+        if self.recognition is not None:
+            return self.recognition.recognize(image_data, candidates, threshold=threshold)
+
+        service = RecognitionService(
+            engine=self.detector.engine,
+            detector=self.detector,
+            aligner=self.aligner,
+            embedder=self.embedder,
+            matching=self.matcher.service,
+            settings=self.matcher.service.settings,
         )
-
-        if not recognized:
-            raise AIServiceError(
-                ErrorCode.UNKNOWN_FACE,
-                details={"best_similarity": round(confidence, 4)},
-                status_code=404,
-            )
-
-        return FaceRecognizeResponse(
-            recognized=True,
-            employee_id=employee_id,
-            confidence=round(confidence, 4),
-            face_count=1,
-        )
+        return service.recognize(image_data, candidates, threshold=threshold)

@@ -103,13 +103,13 @@ def test_tc05_empty_candidates(matching_service):
 def test_tc06_invalid_embedding_empty(matching_service):
     with pytest.raises(AIServiceError) as exc_info:
         matching_service.match([], _candidates())
-    assert exc_info.value.code == ErrorCode.INVALID_IMAGE
+    assert exc_info.value.code == ErrorCode.INVALID_EMBEDDING
 
 
 def test_tc06_invalid_embedding_nan(matching_service):
     with pytest.raises(AIServiceError) as exc_info:
         matching_service.match([1.0, float("nan"), 0.0, 0.0], _candidates())
-    assert exc_info.value.code == ErrorCode.INVALID_IMAGE
+    assert exc_info.value.code == ErrorCode.INVALID_EMBEDDING
 
 
 def test_tc06_invalid_embedding_dimension(matching_service):
@@ -118,7 +118,7 @@ def test_tc06_invalid_embedding_dimension(matching_service):
             [1.0, 0.0, 0.0, 0.0],
             [MatchCandidate(employee_id=1, embedding=[1.0, 0.0])],
         )
-    assert exc_info.value.code == ErrorCode.INVALID_IMAGE
+    assert exc_info.value.code == ErrorCode.INVALID_EMBEDDING
 
 
 def test_tc07_best_match_selection(matching_service):

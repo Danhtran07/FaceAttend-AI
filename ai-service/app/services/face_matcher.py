@@ -52,7 +52,7 @@ class FaceMatchingService:
             )
             if candidate.shape != query.shape:
                 raise AIServiceError(
-                    ErrorCode.INVALID_IMAGE,
+                    ErrorCode.INVALID_EMBEDDING,
                     "Candidate embedding dimension mismatch",
                     details={
                         "employee_id": item.employee_id,
@@ -106,7 +106,7 @@ class FaceMatchingService:
         value = self.threshold if threshold is None else float(threshold)
         if value < 0.0 or value > 1.0:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 "Match threshold must be between 0 and 1",
                 details={"threshold": value},
                 status_code=400,
@@ -121,7 +121,7 @@ class FaceMatchingService:
     ) -> np.ndarray:
         if embedding is None:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 f"{field} is required",
                 status_code=400,
             )
@@ -130,14 +130,14 @@ class FaceMatchingService:
             vector = np.asarray(embedding, dtype=np.float32).flatten()
         except Exception as exc:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 f"{field} is not a valid numeric embedding",
                 status_code=400,
             ) from exc
 
         if vector.size == 0:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 f"{field} is empty",
                 status_code=400,
             )
@@ -145,7 +145,7 @@ class FaceMatchingService:
         expected = int(self.settings.embedding_dim)
         if expected > 0 and vector.shape[0] != expected:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 f"{field} has unexpected dimension",
                 details={"expected": expected, "actual": int(vector.shape[0])},
                 status_code=400,
@@ -153,7 +153,7 @@ class FaceMatchingService:
 
         if not np.isfinite(vector).all():
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 f"{field} contains NaN or Inf",
                 status_code=400,
             )
@@ -165,7 +165,7 @@ class FaceMatchingService:
         norm = float(np.linalg.norm(vector))
         if norm == 0:
             raise AIServiceError(
-                ErrorCode.INVALID_IMAGE,
+                ErrorCode.INVALID_EMBEDDING,
                 "Embedding is a zero vector",
                 status_code=400,
             )

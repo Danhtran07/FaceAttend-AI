@@ -126,3 +126,74 @@ Employee ID / Unknown
 - **Threshold:** configurable via `FACE_MATCH_THRESHOLD` (default `0.5`). Below threshold → `recognized=false`, `employee_id=null`, or `UNKNOWN_FACE`.
 - **Output:** `{ "recognized": true/false, "employee_id": ..., "confidence": ... }`
 
+AI-05 Recognition API:
+
+```http
+POST /face/recognize
+```
+
+**Flow**
+
+```
+Image
+ ↓
+Validate Image
+ ↓
+Face Detection
+ ↓
+Check Face Count (0 → NO_FACE, >1 → MULTIPLE_FACES, 1 → continue)
+ ↓
+Face Alignment
+ ↓
+Face Embedding
+ ↓
+Face Matching (candidates from Backend)
+ ↓
+Result
+```
+
+**Request**
+
+```json
+{
+  "image": "<base64>",
+  "candidates": [
+    { "employee_id": 123, "embedding": [/* 512 floats */] }
+  ],
+  "threshold": 0.5
+}
+```
+
+Backend loads embeddings from PostgreSQL and sends them as `candidates`. AI Service does not open a database connection.
+
+**Recognized response**
+
+```json
+{
+  "recognized": true,
+  "employee_id": 123,
+  "confidence": 0.92
+}
+```
+
+**Unknown response** (HTTP 404, error code `UNKNOWN_FACE`)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNKNOWN_FACE",
+    "message": "Face not recognized among registered employees",
+    "details": {
+      "recognized": false,
+      "employee_id": null,
+      "confidence": 0.31
+    }
+  }
+}
+```
+
+**Error cases:** `NO_FACE`, `MULTIPLE_FACES`, `UNKNOWN_FACE`, `INVALID_IMAGE`, `INVALID_EMBEDDING`, `MODEL_ERROR`
+
+**Backend integration:** Backend authenticates the request, fetches enrolled embeddings, calls AI `/face/recognize`, then records attendance when `recognized=true`.
+

@@ -1,5 +1,3 @@
-import base64
-
 import pytest
 
 from app.core.errors import ErrorCode
@@ -52,18 +50,17 @@ def test_enroll_api(client, sample_image_b64, monkeypatch):
     assert data["dimension"] == 4
 
 
-def test_recognize_api(client, sample_image_b64, monkeypatch):
+def test_recognize_api_known(client, sample_image_b64, monkeypatch):
     from app.api import face as face_api
     from app.core.schemas import FaceRecognizeResponse
 
     monkeypatch.setattr(
-        face_api.pipeline,
+        face_api.recognition_service,
         "recognize",
-        lambda image, registered, threshold=None: FaceRecognizeResponse(
+        lambda image, candidates, threshold=None: FaceRecognizeResponse(
             recognized=True,
             employee_id=123,
             confidence=0.92,
-            face_count=1,
         ),
     )
 
@@ -71,7 +68,7 @@ def test_recognize_api(client, sample_image_b64, monkeypatch):
         "/face/recognize",
         json={
             "image": sample_image_b64,
-            "registered_embeddings": [
+            "candidates": [
                 {"employee_id": 123, "embedding": [1.0, 0.0, 0.0, 0.0]}
             ],
             "threshold": 0.5,
@@ -84,32 +81,28 @@ def test_recognize_api(client, sample_image_b64, monkeypatch):
     assert data["confidence"] == 0.92
 
 
-def test_invalid_image_error(client, invalid_image_b64):
-    response = client.post("/face/detect", json={"image": invalid_image_b64})
-    assert response.status_code == 400
-    data = response.json()
-    assert data["success"] is False
-    assert data["error"]["code"] == ErrorCode.INVALID_IMAGE.value
-
-
-def test_unknown_face_error_format(client, sample_image_b64, monkeypatch):
+def test_recognize_api_unknown(client, sample_image_b64, monkeypatch):
     from app.api import face as face_api
     from app.core.errors import AIServiceError, ErrorCode
 
     def raise_unknown(*args, **kwargs):
         raise AIServiceError(
             ErrorCode.UNKNOWN_FACE,
-            details={"best_similarity": 0.12},
+            details={
+                "recognized": False,
+                "employee_id": None,
+                "confidence": 0.31,
+            },
             status_code=404,
         )
 
-    monkeypatch.setattr(face_api.pipeline, "recognize", raise_unknown)
+    monkeypatch.setattr(face_api.recognition_service, "recognize", raise_unknown)
 
     response = client.post(
         "/face/recognize",
         json={
             "image": sample_image_b64,
-            "registered_embeddings": [
+            "candidates": [
                 {"employee_id": 1, "embedding": [0.0, 1.0, 0.0, 0.0]}
             ],
         },
@@ -117,4 +110,23 @@ def test_unknown_face_error_format(client, sample_image_b64, monkeypatch):
     assert response.status_code == 404
     data = response.json()
     assert data["error"]["code"] == ErrorCode.UNKNOWN_FACE.value
-    assert data["error"]["details"]["best_similarity"] == 0.12
+    assert data["error"]["details"]["recognized"] is False
+    assert data["error"]["details"]["employee_id"] is None
+    assert data["error"]["details"]["confidence"] == 0.31
+
+
+def test_recognize_api_invalid_image(client, invalid_image_b64):
+    response = client.post(
+        "/face/recognize",
+        json={"image": invalid_image_b64, "candidates": []},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == ErrorCode.INVALID_IMAGE.value
+
+
+def test_invalid_image_error(client, invalid_image_b64):
+    response = client.post("/face/detect", json={"image": invalid_image_b64})
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == ErrorCode.INVALID_IMAGE.value

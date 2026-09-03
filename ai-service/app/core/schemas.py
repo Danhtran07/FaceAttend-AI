@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BoundingBox(BaseModel):
@@ -56,20 +56,36 @@ class FaceMatchResponse(BaseModel):
 
 
 class FaceRecognizeRequest(BaseModel):
+    """Recognition request: image + Backend-supplied reference embeddings."""
+
     image: str = Field(..., description="Base64-encoded image")
-    registered_embeddings: list[RegisteredEmbedding] = Field(
+    candidates: list[MatchCandidate] = Field(
         default_factory=list,
-        description="Candidates fetched by Backend from PostgreSQL",
+        description="Reference embeddings fetched by Backend from PostgreSQL",
+    )
+    registered_embeddings: list[RegisteredEmbedding] | None = Field(
+        default=None,
+        description="Deprecated alias for candidates",
+        exclude=True,
     )
     threshold: float | None = Field(None, ge=0.0, le=1.0)
 
+    @model_validator(mode="after")
+    def merge_candidates(self) -> "FaceRecognizeRequest":
+        if self.candidates:
+            return self
+        if self.registered_embeddings:
+            self.candidates = [
+                MatchCandidate(employee_id=item.employee_id, embedding=item.embedding)
+                for item in self.registered_embeddings
+            ]
+        return self
+
 
 class FaceRecognizeResponse(BaseModel):
-    success: bool = True
     recognized: bool
     employee_id: int | None = None
     confidence: float | None = None
-    face_count: int = 0
 
 
 class FaceEnrollRequest(BaseModel):

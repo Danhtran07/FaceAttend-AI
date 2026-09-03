@@ -10,6 +10,7 @@ class ErrorCode(str, Enum):
     MULTIPLE_FACES = "MULTIPLE_FACES"
     UNKNOWN_FACE = "UNKNOWN_FACE"
     INVALID_IMAGE = "INVALID_IMAGE"
+    INVALID_EMBEDDING = "INVALID_EMBEDDING"
     LOW_QUALITY = "LOW_QUALITY"
     MODEL_ERROR = "MODEL_ERROR"
 
@@ -34,6 +35,7 @@ ERROR_MESSAGES = {
     ErrorCode.MULTIPLE_FACES: "Multiple faces detected in the image",
     ErrorCode.UNKNOWN_FACE: "Face not recognized among registered employees",
     ErrorCode.INVALID_IMAGE: "Invalid or unreadable image",
+    ErrorCode.INVALID_EMBEDDING: "Invalid face embedding vector",
     ErrorCode.LOW_QUALITY: "Image quality is too low for reliable recognition",
     ErrorCode.MODEL_ERROR: "AI model processing failed",
 }

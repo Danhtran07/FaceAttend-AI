@@ -53,6 +53,21 @@ Shared service: `FaceMatchingService` (`app/services/face_matcher.py`).
 
 Backend supplies candidates. AI Service does not access the database.
 
+## AI-05 Recognition API
+
+`POST /face/recognize` via `RecognitionService`.
+
+| ID | Test Case | Expected Result |
+|----|-----------|-----------------|
+| R-01 | Known employee | `recognized=true`, employee_id, confidence |
+| R-02 | Unknown employee | `UNKNOWN_FACE` + details confidence |
+| R-03 | No face | `NO_FACE` |
+| R-04 | Multiple faces | `MULTIPLE_FACES` |
+| R-05 | Invalid image | `INVALID_IMAGE` |
+| R-06 | Invalid candidates | `INVALID_EMBEDDING` |
+
+Orchestration: Detector → Alignment → Embedding → Matching. Models loaded once.
+
 ---
 
 ## Summary

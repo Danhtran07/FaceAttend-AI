@@ -14,9 +14,11 @@ from app.core.schemas import (
 )
 from app.services.face_matcher import FaceMatchingService
 from app.services.pipeline import FacePipeline
+from app.services.recognition import RecognitionService
 
 router = APIRouter(prefix="/face", tags=["face"])
 pipeline = FacePipeline()
+recognition_service = RecognitionService()
 matching_service = FaceMatchingService()
 
 
@@ -53,10 +55,14 @@ def match_face(payload: FaceMatchRequest) -> FaceMatchResponse:
 
 @router.post("/recognize", response_model=FaceRecognizeResponse)
 def recognize_face(payload: FaceRecognizeRequest) -> FaceRecognizeResponse:
-    """Full recognition flow: detect -> align -> embed -> match against registered embeddings."""
-    return pipeline.recognize(
+    """Full recognition for attendance check-in.
+
+    Flow: Image → Detect → Align → Embed → Match (Backend candidates).
+    One face only. Backend supplies reference embeddings; AI does not use DB.
+    """
+    return recognition_service.recognize(
         payload.image,
-        payload.registered_embeddings,
+        payload.candidates,
         threshold=payload.threshold,
     )
 
