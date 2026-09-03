@@ -131,3 +131,9 @@ def test_recognize_invalid_candidates(recognition_service, sample_image_b64):
             [MatchCandidate(employee_id=1, embedding=[1.0, float("nan"), 0.0, 0.0])],
         )
     assert exc_info.value.code == ErrorCode.INVALID_EMBEDDING
+
+
+def test_recognize_invalid_image(recognition_service, invalid_image_b64):
+    with pytest.raises(AIServiceError) as exc_info:
+        recognition_service.recognize(invalid_image_b64, [])
+    assert exc_info.value.code == ErrorCode.INVALID_IMAGE

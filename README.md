@@ -73,6 +73,10 @@ docker compose up --build
 
 ## Current Status
 
+AI-01 → AI-07 are implemented on `feature/khoa-ai`.
+
+AI-08 testing report: see [`ai-service/AI_TEST_REPORT.md`](ai-service/AI_TEST_REPORT.md).
+
 AI-01 Face Detection is implemented in `ai-service`.
 
 AI-02 Face Alignment is implemented as a shared `FaceAlignmentService`:

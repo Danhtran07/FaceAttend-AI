@@ -100,10 +100,10 @@ def test_align_landmarks_out_of_bounds(alignment_service, face_image):
     assert exc_info.value.code == ErrorCode.INVALID_IMAGE
 
 
-def test_align_invalid_face_none(alignment_service, valid_landmarks):
+def test_align_wrong_face_size(alignment_service, valid_landmarks):
+    tiny = np.zeros((8, 8, 3), dtype=np.uint8)
     with pytest.raises(AIServiceError) as exc_info:
-        alignment_service.align(None, valid_landmarks)
-
+        alignment_service.align(tiny, valid_landmarks)
     assert exc_info.value.code == ErrorCode.INVALID_IMAGE
 
 
