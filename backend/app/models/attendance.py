@@ -1,7 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
 
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import (
     Date,
     DateTime,
@@ -11,6 +10,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -59,7 +59,10 @@ class Attendance(Base):
     )
 
     status: Mapped[AttendanceStatus] = mapped_column(
-        SQLEnum(AttendanceStatus, name="attendance_status"),
+        SQLEnum(
+            AttendanceStatus,
+            name="attendance_status",
+        ),
         nullable=False,
         default=AttendanceStatus.ABSENT,
     )
