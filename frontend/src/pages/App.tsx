@@ -9,23 +9,18 @@ import Login from "./Login";
 import Dashboard from "./Dashboard";
 import Employees from "./Employees";
 
-import ProtectedRoute from "../components/ProtectedRoute";
 import Layout from "../components/Layout";
+import ProtectedRoute from "../components/ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
-
       <Routes>
-
-        {/* ================= PUBLIC ================= */}
 
         <Route
           path="/login"
           element={<Login />}
         />
-
-        {/* ================= PROTECTED ================= */}
 
         <Route element={<ProtectedRoute />}>
 
@@ -45,8 +40,6 @@ export default function App() {
 
         </Route>
 
-        {/* ================= DEFAULT ================= */}
-
         <Route
           path="/"
           element={
@@ -56,8 +49,6 @@ export default function App() {
             />
           }
         />
-
-        {/* ================= NOT FOUND ================= */}
 
         <Route
           path="*"
@@ -70,7 +61,6 @@ export default function App() {
         />
 
       </Routes>
-
     </BrowserRouter>
   );
 }

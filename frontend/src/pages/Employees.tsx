@@ -1,14 +1,8 @@
-import React, {
+import {
   useEffect,
   useMemo,
   useState,
 } from "react";
-
-import {
-  Link,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
 
 import {
   createEmployee,
@@ -27,68 +21,57 @@ import type {
   EmployeeUpdate,
 } from "../types/employee";
 
-import Loading from "../components/Loading";
-import ErrorMessage from "../components/ErrorMessage";
 
+/* ============================================================
+   FORM TYPE
+============================================================ */
 
 interface EmployeeForm {
-
   employee_code: string;
-
   full_name: string;
-
   email: string;
-
   department: string;
-
   user_id: string;
 }
 
 
+/* ============================================================
+   EMPTY FORM
+============================================================ */
+
 const emptyForm: EmployeeForm = {
-
   employee_code: "",
-
   full_name: "",
-
   email: "",
-
   department: "",
-
   user_id: "",
 };
 
 
+/* ============================================================
+   PAGE
+============================================================ */
+
 export default function Employees() {
 
-  const navigate = useNavigate();
-
-  const location = useLocation();
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Employee state
-  |--------------------------------------------------------------------------
-  */
+  /* ----------------------------------------------------------
+     Employees
+  ---------------------------------------------------------- */
 
   const [
     employees,
     setEmployees,
   ] = useState<Employee[]>([]);
 
-
   const [
     loading,
     setLoading,
   ] = useState(true);
 
-
   const [
     loadError,
     setLoadError,
   ] = useState("");
-
 
   const [
     search,
@@ -96,37 +79,31 @@ export default function Employees() {
   ] = useState("");
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Modal state
-  |--------------------------------------------------------------------------
-  */
+  /* ----------------------------------------------------------
+     Modal
+  ---------------------------------------------------------- */
 
   const [
     showModal,
     setShowModal,
   ] = useState(false);
 
-
   const [
     editingEmployee,
     setEditingEmployee,
   ] = useState<Employee | null>(null);
 
-
   const [
     form,
     setForm,
-  ] = useState<EmployeeForm>(
-    emptyForm
-  );
-
+  ] = useState<EmployeeForm>({
+    ...emptyForm,
+  });
 
   const [
     saving,
     setSaving,
   ] = useState(false);
-
 
   const [
     formError,
@@ -134,17 +111,14 @@ export default function Employees() {
   ] = useState("");
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Delete state
-  |--------------------------------------------------------------------------
-  */
+  /* ----------------------------------------------------------
+     Delete
+  ---------------------------------------------------------- */
 
   const [
     deletingId,
     setDeletingId,
   ] = useState<number | null>(null);
-
 
   const [
     deleteError,
@@ -152,41 +126,15 @@ export default function Employees() {
   ] = useState("");
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Current user
-  |--------------------------------------------------------------------------
-  */
-
-  const user = useMemo(() => {
-
-    try {
-
-      return JSON.parse(
-        localStorage.getItem("user") || "{}"
-      );
-
-    } catch {
-
-      return {};
-
-    }
-
-  }, []);
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Load employees
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     LOAD EMPLOYEES
+  ========================================================== */
 
   async function loadEmployees() {
 
     try {
 
       setLoading(true);
-
       setLoadError("");
 
       const data =
@@ -214,23 +162,21 @@ export default function Employees() {
 
 
   useEffect(() => {
-
     loadEmployees();
-
   }, []);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Search
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     FILTER
+  ========================================================== */
 
   const filteredEmployees =
     useMemo(() => {
 
       const keyword =
-        search.trim().toLowerCase();
+        search
+          .trim()
+          .toLowerCase();
 
       if (!keyword) {
         return employees;
@@ -240,44 +186,42 @@ export default function Employees() {
         (employee) => {
 
           return [
-
             employee.employee_code,
-
             employee.full_name,
-
             employee.email,
-
             employee.department || "",
-
             String(employee.user_id),
-
           ]
             .join(" ")
             .toLowerCase()
             .includes(keyword);
+
         }
       );
 
     }, [employees, search]);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Modal
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     CREATE MODAL
+  ========================================================== */
 
   function openCreateModal() {
 
     setEditingEmployee(null);
 
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+    });
 
     setFormError("");
-
     setShowModal(true);
   }
 
+
+  /* ==========================================================
+     EDIT MODAL
+  ========================================================== */
 
   function openEditModal(
     employee: Employee
@@ -286,7 +230,6 @@ export default function Employees() {
     setEditingEmployee(employee);
 
     setForm({
-
       employee_code:
         employee.employee_code,
 
@@ -301,14 +244,16 @@ export default function Employees() {
 
       user_id:
         String(employee.user_id),
-
     });
 
     setFormError("");
-
     setShowModal(true);
   }
 
+
+  /* ==========================================================
+     CLOSE MODAL
+  ========================================================== */
 
   function closeModal() {
 
@@ -320,11 +265,17 @@ export default function Employees() {
 
     setEditingEmployee(null);
 
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+    });
 
     setFormError("");
   }
 
+
+  /* ==========================================================
+     CHANGE FORM
+  ========================================================== */
 
   function handleChange(
     field: keyof EmployeeForm,
@@ -332,25 +283,20 @@ export default function Employees() {
   ) {
 
     setForm((current) => ({
-
       ...current,
-
       [field]: value,
-
     }));
 
     setFormError("");
   }
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Submit
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     SUBMIT
+  ========================================================== */
 
   async function handleSubmit(
-    event: React.FormEvent
+    event: React.FormEvent<HTMLFormElement>
   ) {
 
     event.preventDefault();
@@ -358,11 +304,14 @@ export default function Employees() {
     setFormError("");
 
 
+    /* --------------------------------------------------------
+       Required fields
+    -------------------------------------------------------- */
+
     if (
       !form.employee_code.trim() ||
       !form.full_name.trim() ||
-      !form.email.trim() ||
-      !form.user_id.trim()
+      !form.email.trim()
     ) {
 
       setFormError(
@@ -373,44 +322,43 @@ export default function Employees() {
     }
 
 
-    const userId =
-      Number(form.user_id);
+    /* --------------------------------------------------------
+       User ID - CREATE ONLY
+    -------------------------------------------------------- */
 
+    let userId: number | undefined;
 
-    if (
-      !Number.isInteger(userId) ||
-      userId <= 0
-    ) {
+    if (!editingEmployee) {
 
-      setFormError(
-        "User ID must be a valid number."
-      );
+      if (!form.user_id.trim()) {
 
-      return;
+        setFormError(
+          "User ID is required."
+        );
+
+        return;
+      }
+
+      userId =
+        Number(form.user_id);
+
+      if (
+        !Number.isInteger(userId) ||
+        userId <= 0
+      ) {
+
+        setFormError(
+          "User ID must be a valid number."
+        );
+
+        return;
+      }
     }
 
 
-    const data:
-      EmployeeCreate | EmployeeUpdate = {
-
-      employee_code:
-        form.employee_code.trim(),
-
-      full_name:
-        form.full_name.trim(),
-
-      email:
-        form.email.trim(),
-
-      department:
-        form.department.trim()
-          ? form.department.trim()
-          : null,
-
-      user_id:
-        userId,
-    };
-
+    /* --------------------------------------------------------
+       API
+    -------------------------------------------------------- */
 
     try {
 
@@ -419,7 +367,29 @@ export default function Employees() {
       setFormError("");
 
 
+      /* ======================================================
+         UPDATE
+      ====================================================== */
+
       if (editingEmployee) {
+
+        const data: EmployeeUpdate = {
+
+          employee_code:
+            form.employee_code.trim(),
+
+          full_name:
+            form.full_name.trim(),
+
+          email:
+            form.email.trim(),
+
+          department:
+            form.department.trim()
+              ? form.department.trim()
+              : null,
+        };
+
 
         const updated =
           await updateEmployee(
@@ -439,11 +409,38 @@ export default function Employees() {
             )
         );
 
-      } else {
+      }
+
+
+      /* ======================================================
+         CREATE
+      ====================================================== */
+
+      else {
+
+        const data: EmployeeCreate = {
+
+          employee_code:
+            form.employee_code.trim(),
+
+          full_name:
+            form.full_name.trim(),
+
+          email:
+            form.email.trim(),
+
+          department:
+            form.department.trim()
+              ? form.department.trim()
+              : null,
+
+          user_id: userId!,
+        };
+
 
         const created =
           await createEmployee(
-            data as EmployeeCreate
+            data
           );
 
 
@@ -477,11 +474,9 @@ export default function Employees() {
   }
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Delete
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     DELETE
+  ========================================================== */
 
   async function handleDelete(
     employee: Employee
@@ -492,7 +487,6 @@ export default function Employees() {
         `Are you sure you want to delete ${employee.full_name}?`
       );
 
-
     if (!confirmed) {
       return;
     }
@@ -500,7 +494,9 @@ export default function Employees() {
 
     try {
 
-      setDeletingId(employee.id);
+      setDeletingId(
+        employee.id
+      );
 
       setDeleteError("");
 
@@ -514,7 +510,8 @@ export default function Employees() {
         (current) =>
           current.filter(
             (item) =>
-              item.id !== employee.id
+              item.id !==
+              employee.id
           )
       );
 
@@ -537,215 +534,393 @@ export default function Employees() {
   }
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Logout
-  |--------------------------------------------------------------------------
-  */
-
-  function handleLogout() {
-
-    localStorage.removeItem(
-      "access_token"
-    );
-
-    localStorage.removeItem(
-      "user"
-    );
-
-    navigate(
-      "/login",
-      { replace: true }
-    );
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Render
-  |--------------------------------------------------------------------------
-  */
+  /* ==========================================================
+     RENDER
+  ========================================================== */
 
   return (
+    <div className="mx-auto w-full max-w-[1600px]">
 
-    <div className="dashboard-layout">
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
+      <header
+        className="
+          mb-7
+          flex flex-col
+          gap-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
 
-      {/* SIDEBAR */}
+        <div>
 
-      <aside className="sidebar">
-
-        <div className="sidebar-logo">
-
-          <div className="sidebar-logo-icon">
-            F
+          <div
+            className="
+              mb-1
+              text-[11px]
+              font-bold
+              uppercase
+              tracking-[0.12em]
+              text-blue-600
+            "
+          >
+            Management
           </div>
 
-          <div className="sidebar-logo-text">
-            FaceAttend
-          </div>
+          <h1
+            className="
+              text-2xl
+              font-extrabold
+              tracking-tight
+              text-slate-900
+              sm:text-3xl
+            "
+          >
+            Employees
+          </h1>
+
+          <p
+            className="
+              mt-1.5
+              text-sm
+              text-slate-500
+            "
+          >
+            Manage employee information
+            and account assignments
+          </p>
 
         </div>
 
 
-        <nav className="sidebar-menu">
+        <button
+          type="button"
+          onClick={openCreateModal}
+          disabled={loading}
+          className="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            bg-blue-600
+            px-5 py-3
+            text-sm font-bold
+            text-white
+            shadow-sm
+            transition
 
-          <Link
-            to="/dashboard"
-            className={
-              `sidebar-link ${
-                location.pathname ===
-                "/dashboard"
-                  ? "active"
-                  : ""
-              }`
-            }
+            hover:bg-blue-700
+            hover:shadow-md
+
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-200
+
+            disabled:cursor-not-allowed
+            disabled:opacity-50
+          "
+        >
+          <span className="mr-2 text-lg">
+            +
+          </span>
+
+          Add Employee
+        </button>
+
+      </header>
+
+
+      {/* ======================================================
+          DELETE ERROR
+      ====================================================== */}
+
+      {deleteError && (
+
+        <div
+          className="
+            mb-5
+            flex items-center
+            gap-3
+            rounded-xl
+            border border-red-200
+            bg-red-50
+            px-4 py-3
+            text-sm
+            text-red-700
+          "
+        >
+
+          <span
+            className="
+              flex h-7 w-7
+              shrink-0
+              items-center justify-center
+              rounded-full
+              bg-red-100
+              font-bold
+            "
           >
+            !
+          </span>
 
-            <span>▦</span>
-
-            <span>
-              Dashboard
-            </span>
-
-          </Link>
-
-
-          <Link
-            to="/employees"
-            className={
-              `sidebar-link ${
-                location.pathname ===
-                "/employees"
-                  ? "active"
-                  : ""
-              }`
-            }
-          >
-
-            <span>♙</span>
-
-            <span>
-              Employees
-            </span>
-
-          </Link>
-
-        </nav>
-
-
-        <div className="sidebar-bottom">
+          <span className="flex-1">
+            {deleteError}
+          </span>
 
           <button
-            className="sidebar-link"
-            onClick={handleLogout}
             type="button"
+            onClick={() =>
+              setDeleteError("")
+            }
+            className="
+              rounded-lg
+              px-2 py-1
+              text-red-400
+              hover:bg-red-100
+              hover:text-red-700
+            "
           >
-
-            <span>↪</span>
-
-            <span>
-              Logout
-            </span>
-
+            ×
           </button>
 
+        </div>
 
-          <div className="sidebar-user">
+      )}
 
-            <div className="user-avatar">
 
-              {
-                user.username
-                  ?.charAt(0)
-                  ?.toUpperCase() || "U"
+      {/* ======================================================
+          EMPLOYEE CARD
+      ====================================================== */}
+
+      <section
+        className="
+          overflow-hidden
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
+
+        {/* ====================================================
+            TOOLBAR
+        ==================================================== */}
+
+        <div
+          className="
+            flex flex-col
+            gap-4
+            border-b border-slate-100
+            p-5
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+            sm:p-6
+          "
+        >
+
+          {/* Search */}
+
+          <div
+            className="
+              relative
+              w-full
+              sm:max-w-xl
+            "
+          >
+
+            <span
+              className="
+                pointer-events-none
+                absolute
+                left-4
+                top-1/2
+                -translate-y-1/2
+                text-base
+                text-slate-400
+              "
+            >
+              🔍
+            </span>
+
+            <input
+              type="text"
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value
+                )
               }
+              disabled={loading}
+              placeholder="Search by employee code, name, email or department..."
+              className="
+                w-full
+                rounded-xl
+                border border-slate-200
+                bg-slate-50
+                py-3
+                pl-11
+                pr-4
+                text-sm
+                text-slate-800
+                outline-none
+                transition
 
-            </div>
+                placeholder:text-slate-400
+
+                focus:border-blue-400
+                focus:bg-white
+                focus:ring-4
+                focus:ring-blue-50
+
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+              "
+            />
+
+          </div>
 
 
-            <div>
+          {/* Count */}
 
-              <div className="user-name">
-
-                {
-                  user.username ||
-                  "User"
-                }
-
-              </div>
-
-              <div className="user-role">
-
-                {
-                  user.role ||
-                  "Employee"
-                }
-
-              </div>
-
-            </div>
-
+          <div
+            className="
+              shrink-0
+              text-sm
+              font-semibold
+              text-slate-400
+            "
+          >
+            <span className="text-slate-700">
+              {filteredEmployees.length}
+            </span>{" "}
+            {filteredEmployees.length === 1
+              ? "employee"
+              : "employees"}
           </div>
 
         </div>
 
-      </aside>
 
+        {/* ====================================================
+            LOADING
+        ==================================================== */}
 
-      {/* MAIN */}
+        {loading && (
 
-      <main className="page-main">
+          <div
+            className="
+              flex
+              min-h-[320px]
+              flex-col
+              items-center
+              justify-center
+              gap-4
+            "
+          >
 
+            <div
+              className="
+                h-10 w-10
+                animate-spin
+                rounded-full
+                border-4
+                border-slate-200
+                border-t-blue-600
+              "
+            />
 
-        {/* HEADER */}
-
-        <header className="page-header">
-
-          <div className="page-title">
-
-            <h1>
-              Employees
-            </h1>
-
-            <p>
-              Manage employee information
+            <p
+              className="
+                text-sm
+                font-medium
+                text-slate-500
+              "
+            >
+              Loading employees...
             </p>
 
           </div>
 
+        )}
 
-          <button
-            className="primary-button"
-            onClick={openCreateModal}
-            type="button"
-            disabled={loading}
+
+        {/* ====================================================
+            ERROR
+        ==================================================== */}
+
+        {!loading && loadError && (
+
+          <div
+            className="
+              flex
+              min-h-[320px]
+              flex-col
+              items-center
+              justify-center
+              px-6
+              text-center
+            "
           >
-            + Add Employee
-          </button>
 
-        </header>
+            <div
+              className="
+                mb-4
+                flex h-12 w-12
+                items-center justify-center
+                rounded-full
+                bg-red-50
+                text-lg font-bold
+                text-red-600
+              "
+            >
+              !
+            </div>
 
+            <h3
+              className="
+                text-base
+                font-bold
+                text-slate-800
+              "
+            >
+              Unable to load employees
+            </h3>
 
-        {/* DELETE ERROR */}
-
-        {deleteError && (
-
-          <div className="error-alert">
-
-            <span>⚠</span>
-
-            <span>
-              {deleteError}
-            </span>
+            <p
+              className="
+                mt-2
+                max-w-md
+                text-sm
+                leading-6
+                text-slate-500
+              "
+            >
+              {loadError}
+            </p>
 
             <button
               type="button"
-              onClick={() =>
-                setDeleteError("")
-              }
+              onClick={loadEmployees}
+              className="
+                mt-5
+                rounded-xl
+                bg-blue-600
+                px-5 py-2.5
+                text-sm font-bold
+                text-white
+                transition
+                hover:bg-blue-700
+                focus:outline-none
+                focus:ring-4
+                focus:ring-blue-100
+              "
             >
-              ×
+              Try Again
             </button>
 
           </div>
@@ -753,95 +928,82 @@ export default function Employees() {
         )}
 
 
-        {/* EMPLOYEE CARD */}
+        {/* ====================================================
+            EMPTY
+        ==================================================== */}
 
-        <section className="employee-card">
+        {!loading &&
+          !loadError &&
+          filteredEmployees.length === 0 && (
 
+            <div
+              className="
+                flex
+                min-h-[320px]
+                flex-col
+                items-center
+                justify-center
+                px-6
+                text-center
+              "
+            >
 
-          {/* TOOLBAR */}
-
-          <div className="employee-toolbar">
-
-            <div className="search-wrapper">
-
-              <span className="search-icon">
-                🔍
-              </span>
-
-              <input
-                className="search-input"
-                value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
-                }
-                placeholder="Search by employee code, name, email or department..."
-                disabled={loading}
-              />
-
-            </div>
-
-
-            <div className="employee-count">
-
-              {filteredEmployees.length}
-
-              {" employee"}
-
-              {
-                filteredEmployees.length !==
-                1
-                  ? "s"
-                  : ""
-              }
-
-            </div>
-
-          </div>
-
-
-          {/* CONTENT */}
-
-          {loading ? (
-
-            <Loading
-              message="Loading employees..."
-            />
-
-          ) : loadError ? (
-
-            <ErrorMessage
-              message={loadError}
-              onRetry={loadEmployees}
-            />
-
-          ) : filteredEmployees.length === 0 ? (
-
-            <div className="empty-state">
-
-              <div className="empty-icon">
+              <div
+                className="
+                  mb-4
+                  flex h-16 w-16
+                  items-center justify-center
+                  rounded-2xl
+                  bg-slate-100
+                  text-2xl
+                "
+              >
                 👥
               </div>
 
-              <div>
+              <h3
+                className="
+                  text-base
+                  font-bold
+                  text-slate-800
+                "
+              >
+                {search
+                  ? "No employees found"
+                  : "No employees yet"}
+              </h3>
 
-                {
-                  search
-                    ? "No employees found."
-                    : "No employees yet."
-                }
-
-              </div>
+              <p
+                className="
+                  mt-2
+                  max-w-sm
+                  text-sm
+                  leading-6
+                  text-slate-500
+                "
+              >
+                {search
+                  ? "Try changing your search keyword."
+                  : "Start by creating your first employee."}
+              </p>
 
               {!search && (
 
                 <button
                   type="button"
-                  className="primary-button"
                   onClick={
                     openCreateModal
                   }
+                  className="
+                    mt-5
+                    rounded-xl
+                    bg-blue-600
+                    px-5 py-2.5
+                    text-sm font-bold
+                    text-white
+                    transition
+                    hover:bg-blue-700
+                  "
                 >
                   + Add Employee
                 </button>
@@ -850,38 +1012,122 @@ export default function Employees() {
 
             </div>
 
-          ) : (
+          )}
 
-            <div className="employee-table-wrapper">
 
-              <table className="employee-table">
+        {/* ====================================================
+            TABLE
+        ==================================================== */}
+
+        {!loading &&
+          !loadError &&
+          filteredEmployees.length > 0 && (
+
+            <div
+              className="
+                overflow-x-auto
+              "
+            >
+
+              <table
+                className="
+                  min-w-[900px]
+                  w-full
+                  border-collapse
+                "
+              >
 
                 <thead>
 
-                  <tr>
+                  <tr
+                    className="
+                      border-b border-slate-100
+                      bg-slate-50/70
+                    "
+                  >
 
-                    <th>
-                      EMPLOYEE
+                    <th
+                      className="
+                        px-5 py-4
+                        text-left
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      Employee
                     </th>
 
-                    <th>
-                      NAME
+                    <th
+                      className="
+                        px-5 py-4
+                        text-left
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      Name
                     </th>
 
-                    <th>
-                      EMAIL
+                    <th
+                      className="
+                        px-5 py-4
+                        text-left
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      Email
                     </th>
 
-                    <th>
-                      DEPARTMENT
+                    <th
+                      className="
+                        px-5 py-4
+                        text-left
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      Department
                     </th>
 
-                    <th>
-                      USER ID
+                    <th
+                      className="
+                        px-5 py-4
+                        text-left
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      User ID
                     </th>
 
-                    <th>
-                      ACTIONS
+                    <th
+                      className="
+                        px-5 py-4
+                        text-right
+                        text-[11px]
+                        font-bold
+                        uppercase
+                        tracking-wider
+                        text-slate-400
+                      "
+                    >
+                      Actions
                     </th>
 
                   </tr>
@@ -889,135 +1135,235 @@ export default function Employees() {
                 </thead>
 
 
-                <tbody>
+                <tbody
+                  className="
+                    divide-y divide-slate-100
+                  "
+                >
 
                   {filteredEmployees.map(
                     (employee) => (
 
                       <tr
-                        key={
-                          employee.id
-                        }
+                        key={employee.id}
+                        className="
+                          transition
+                          hover:bg-slate-50/70
+                        "
                       >
 
-                        <td>
+                        {/* Employee Code */}
 
-                          <span className="employee-code">
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
 
-                            {
-                              employee.employee_code
-                            }
-
+                          <span
+                            className="
+                              rounded-lg
+                              bg-blue-50
+                              px-2.5 py-1.5
+                              text-xs
+                              font-bold
+                              text-blue-600
+                            "
+                          >
+                            {employee.employee_code}
                           </span>
 
                         </td>
 
 
-                        <td>
+                        {/* Name */}
 
-                          <div className="employee-info">
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
 
-                            <div className="employee-avatar">
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                            "
+                          >
 
-                              {
-                                getInitials(
-                                  employee.full_name
-                                )
-                              }
-
-                            </div>
-
-                            <div className="employee-name">
-
-                              {
+                            <div
+                              className="
+                                flex h-9 w-9
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-full
+                                bg-slate-100
+                                text-xs font-bold
+                                text-slate-600
+                              "
+                            >
+                              {getInitials(
                                 employee.full_name
-                              }
-
+                              )}
                             </div>
+
+                            <span
+                              className="
+                                whitespace-nowrap
+                                text-sm
+                                font-bold
+                                text-slate-800
+                              "
+                            >
+                              {employee.full_name}
+                            </span>
 
                           </div>
 
                         </td>
 
 
-                        <td>
+                        {/* Email */}
 
-                          <span className="employee-email">
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
 
-                            {
-                              employee.email
-                            }
-
+                          <span
+                            className="
+                              text-sm
+                              text-slate-500
+                            "
+                          >
+                            {employee.email}
                           </span>
 
                         </td>
 
 
-                        <td>
+                        {/* Department */}
 
-                          {
-                            employee.department ? (
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
 
-                              <span className="department-badge">
+                          {employee.department ? (
 
-                                {
-                                  employee.department
-                                }
+                            <span
+                              className="
+                                inline-flex
+                                rounded-lg
+                                bg-slate-100
+                                px-2.5 py-1.5
+                                text-xs
+                                font-semibold
+                                text-slate-600
+                              "
+                            >
+                              {employee.department}
+                            </span>
 
-                              </span>
+                          ) : (
 
-                            ) : (
+                            <span
+                              className="
+                                text-sm
+                                text-slate-300
+                              "
+                            >
+                              —
+                            </span>
 
-                              <span>
-                                —
-                              </span>
-
-                            )
-                          }
+                          )}
 
                         </td>
 
 
-                        <td>
+                        {/* User ID */}
 
-                          <span className="user-id">
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
 
-                            #
-                            {
-                              employee.user_id
-                            }
-
+                          <span
+                            className="
+                              text-sm
+                              font-semibold
+                              text-slate-500
+                            "
+                          >
+                            #{employee.user_id}
                           </span>
 
                         </td>
 
 
-                        <td>
+                        {/* Actions */}
 
-                          <div className="action-buttons">
+                        <td
+                          className="
+                            px-5 py-4
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              justify-end
+                              gap-2
+                            "
+                          >
+
+                            {/* Edit */}
 
                             <button
-                              className="action-button"
-                              title="Edit employee"
                               type="button"
+                              title="Edit employee"
                               onClick={() =>
                                 openEditModal(
                                   employee
                                 )
                               }
                               disabled={
-                                deletingId !==
-                                null
+                                deletingId !== null ||
+                                saving
                               }
+                              className="
+                                flex h-9 w-9
+                                items-center
+                                justify-center
+                                rounded-lg
+                                border border-slate-200
+                                bg-white
+                                text-sm
+                                text-slate-500
+                                transition
+
+                                hover:border-blue-200
+                                hover:bg-blue-50
+                                hover:text-blue-600
+
+                                disabled:cursor-not-allowed
+                                disabled:opacity-40
+                              "
                             >
                               ✎
                             </button>
 
 
+                            {/* Delete */}
+
                             <button
-                              className="action-button delete"
-                              title="Delete employee"
                               type="button"
+                              title="Delete employee"
                               onClick={() =>
                                 handleDelete(
                                   employee
@@ -1025,17 +1371,43 @@ export default function Employees() {
                               }
                               disabled={
                                 deletingId ===
-                                employee.id
+                                  employee.id ||
+                                saving
                               }
+                              className="
+                                flex h-9 w-9
+                                items-center
+                                justify-center
+                                rounded-lg
+                                border border-slate-200
+                                bg-white
+                                text-sm
+                                text-slate-400
+                                transition
+
+                                hover:border-red-200
+                                hover:bg-red-50
+                                hover:text-red-600
+
+                                disabled:cursor-not-allowed
+                                disabled:opacity-40
+                              "
                             >
-
-                              {
-                                deletingId ===
-                                employee.id
-                                  ? "..."
-                                  : "🗑"
-                              }
-
+                              {deletingId ===
+                              employee.id
+                                ? (
+                                  <span
+                                    className="
+                                      h-4 w-4
+                                      animate-spin
+                                      rounded-full
+                                      border-2
+                                      border-slate-200
+                                      border-t-red-500
+                                    "
+                                  />
+                                )
+                                : "🗑"}
                             </button>
 
                           </div>
@@ -1055,54 +1427,108 @@ export default function Employees() {
 
           )}
 
-        </section>
-
-      </main>
+      </section>
 
 
-      {/* MODAL */}
+      {/* ======================================================
+          MODAL
+      ====================================================== */}
 
       {showModal && (
 
         <div
-          className="modal-overlay"
+          className="
+            fixed inset-0 z-[100]
+            flex items-center
+            justify-center
+            bg-slate-900/50
+            p-4
+            backdrop-blur-sm
+          "
           onMouseDown={(event) => {
 
             if (
               event.target ===
               event.currentTarget
             ) {
-
               closeModal();
-
             }
 
           }}
         >
 
-          <div className="modal">
+          <div
+            className="
+              w-full
+              max-w-lg
+              overflow-hidden
+              rounded-2xl
+              bg-white
+              shadow-2xl
+            "
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
 
+            {/* =================================================
+                MODAL HEADER
+            ================================================= */}
 
-            {/* MODAL HEADER */}
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                border-b border-slate-100
+                px-6 py-5
+              "
+            >
 
-            <div className="modal-header">
+              <div>
 
-              <h2>
-
-                {
-                  editingEmployee
+                <h2
+                  className="
+                    text-lg
+                    font-extrabold
+                    text-slate-900
+                  "
+                >
+                  {editingEmployee
                     ? "Edit Employee"
-                    : "Add Employee"
-                }
+                    : "Add Employee"}
+                </h2>
 
-              </h2>
+                <p
+                  className="
+                    mt-1
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  {editingEmployee
+                    ? "Update employee information"
+                    : "Create a new employee account assignment"}
+                </p>
+
+              </div>
 
 
               <button
-                className="modal-close"
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
+                className="
+                  flex h-9 w-9
+                  items-center justify-center
+                  rounded-lg
+                  text-lg
+                  text-slate-400
+                  transition
+                  hover:bg-slate-100
+                  hover:text-slate-700
+                  disabled:opacity-40
+                "
               >
                 ×
               </button>
@@ -1110,21 +1536,52 @@ export default function Employees() {
             </div>
 
 
+            {/* =================================================
+                FORM
+            ================================================= */}
+
             <form
               onSubmit={handleSubmit}
             >
 
-              <div className="modal-body">
+              <div
+                className="
+                  max-h-[70vh]
+                  space-y-5
+                  overflow-y-auto
+                  px-6 py-6
+                "
+              >
 
-
-                {/* FORM ERROR */}
+                {/* Form Error */}
 
                 {formError && (
 
-                  <div className="error-alert">
+                  <div
+                    className="
+                      flex
+                      items-start
+                      gap-3
+                      rounded-xl
+                      border border-red-200
+                      bg-red-50
+                      p-3.5
+                      text-sm
+                      text-red-700
+                    "
+                  >
 
-                    <span>
-                      ⚠
+                    <span
+                      className="
+                        flex h-6 w-6
+                        shrink-0
+                        items-center justify-center
+                        rounded-full
+                        bg-red-100
+                        text-xs font-bold
+                      "
+                    >
+                      !
                     </span>
 
                     <span>
@@ -1136,23 +1593,14 @@ export default function Employees() {
                 )}
 
 
-                {/* EMPLOYEE CODE */}
+                {/* Employee Code */}
 
-                <div className="modal-form-group">
-
-                  <label className="modal-form-label">
-
-                    Employee Code
-
-                    <span className="required">
-                      *
-                    </span>
-
-                  </label>
-
-
+                <FormField
+                  label="Employee Code"
+                  required
+                >
                   <input
-                    className="modal-input"
+                    type="text"
                     value={
                       form.employee_code
                     }
@@ -1165,28 +1613,19 @@ export default function Employees() {
                     placeholder="EMP001"
                     required
                     disabled={saving}
+                    className={inputClassName}
                   />
-
-                </div>
-
-
-                {/* FULL NAME */}
-
-                <div className="modal-form-group">
-
-                  <label className="modal-form-label">
-
-                    Full Name
-
-                    <span className="required">
-                      *
-                    </span>
-
-                  </label>
+                </FormField>
 
 
+                {/* Full Name */}
+
+                <FormField
+                  label="Full Name"
+                  required
+                >
                   <input
-                    className="modal-input"
+                    type="text"
                     value={
                       form.full_name
                     }
@@ -1199,28 +1638,18 @@ export default function Employees() {
                     placeholder="Nguyen Van A"
                     required
                     disabled={saving}
+                    className={inputClassName}
                   />
-
-                </div>
-
-
-                {/* EMAIL */}
-
-                <div className="modal-form-group">
-
-                  <label className="modal-form-label">
-
-                    Email
-
-                    <span className="required">
-                      *
-                    </span>
-
-                  </label>
+                </FormField>
 
 
+                {/* Email */}
+
+                <FormField
+                  label="Email"
+                  required
+                >
                   <input
-                    className="modal-input"
                     type="email"
                     value={
                       form.email
@@ -1234,24 +1663,18 @@ export default function Employees() {
                     placeholder="employee@gmail.com"
                     required
                     disabled={saving}
+                    className={inputClassName}
                   />
-
-                </div>
-
-
-                {/* DEPARTMENT */}
-
-                <div className="modal-form-group">
-
-                  <label className="modal-form-label">
-
-                    Department
-
-                  </label>
+                </FormField>
 
 
+                {/* Department */}
+
+                <FormField
+                  label="Department"
+                >
                   <input
-                    className="modal-input"
+                    type="text"
                     value={
                       form.department
                     }
@@ -1263,58 +1686,91 @@ export default function Employees() {
                     }
                     placeholder="IT"
                     disabled={saving}
+                    className={inputClassName}
                   />
-
-                </div>
-
-
-                {/* USER ID */}
-
-                <div className="modal-form-group">
-
-                  <label className="modal-form-label">
-
-                    User ID
-
-                    <span className="required">
-                      *
-                    </span>
-
-                  </label>
+                </FormField>
 
 
-                  <input
-                    className="modal-input"
-                    type="number"
-                    min="1"
-                    value={
-                      form.user_id
-                    }
-                    onChange={(event) =>
-                      handleChange(
-                        "user_id",
-                        event.target.value
-                      )
-                    }
-                    placeholder="2"
+                {/* User ID - CREATE ONLY */}
+
+                {!editingEmployee && (
+
+                  <FormField
+                    label="User ID"
                     required
-                    disabled={saving}
-                  />
+                  >
 
-                </div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={
+                        form.user_id
+                      }
+                      onChange={(event) =>
+                        handleChange(
+                          "user_id",
+                          event.target.value
+                        )
+                      }
+                      placeholder="2"
+                      required
+                      disabled={saving}
+                      className={inputClassName}
+                    />
+
+                    <p
+                      className="
+                        mt-1.5
+                        text-[11px]
+                        leading-5
+                        text-slate-400
+                      "
+                    >
+                      Enter the existing user ID
+                      that should be associated
+                      with this employee.
+                    </p>
+
+                  </FormField>
+
+                )}
 
               </div>
 
 
-              {/* FOOTER */}
+              {/* =================================================
+                  FOOTER
+              ================================================= */}
 
-              <div className="modal-footer">
+              <div
+                className="
+                  flex
+                  justify-end
+                  gap-3
+                  border-t border-slate-100
+                  bg-slate-50/50
+                  px-6 py-4
+                "
+              >
 
                 <button
                   type="button"
-                  className="secondary-button"
                   onClick={closeModal}
                   disabled={saving}
+                  className="
+                    rounded-xl
+                    border border-slate-200
+                    bg-white
+                    px-5 py-2.5
+                    text-sm font-semibold
+                    text-slate-600
+                    transition
+
+                    hover:bg-slate-50
+
+                    disabled:cursor-not-allowed
+                    disabled:opacity-50
+                  "
                 >
                   Cancel
                 </button>
@@ -1322,17 +1778,49 @@ export default function Employees() {
 
                 <button
                   type="submit"
-                  className="primary-button"
                   disabled={saving}
+                  className="
+                    inline-flex
+                    min-w-[130px]
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-blue-600
+                    px-5 py-2.5
+                    text-sm font-bold
+                    text-white
+                    transition
+
+                    hover:bg-blue-700
+
+                    focus:outline-none
+                    focus:ring-4
+                    focus:ring-blue-100
+
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
                 >
 
-                  {
-                    saving
-                      ? "Saving..."
-                      : editingEmployee
-                        ? "Save Changes"
-                        : "Create Employee"
-                  }
+                  {saving && (
+                    <span
+                      className="
+                        h-4 w-4
+                        animate-spin
+                        rounded-full
+                        border-2
+                        border-white/40
+                        border-t-white
+                      "
+                    />
+                  )}
+
+                  {saving
+                    ? "Saving..."
+                    : editingEmployee
+                      ? "Save Changes"
+                      : "Create Employee"}
 
                 </button>
 
@@ -1351,16 +1839,83 @@ export default function Employees() {
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
+/* ============================================================
+   FORM FIELD
+============================================================ */
+
+function FormField({
+  label,
+  required = false,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+
+      <label
+        className="
+          mb-2
+          block
+          text-xs
+          font-bold
+          text-slate-700
+        "
+      >
+
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">
+            *
+          </span>
+        )}
+
+      </label>
+
+      {children}
+
+    </div>
+  );
+}
+
+
+/* ============================================================
+   INPUT STYLE
+============================================================ */
+
+const inputClassName = `
+  w-full
+  rounded-xl
+  border border-slate-200
+  bg-white
+  px-4 py-3
+  text-sm
+  text-slate-800
+  outline-none
+  transition
+
+  placeholder:text-slate-400
+
+  focus:border-blue-400
+  focus:ring-4
+  focus:ring-blue-50
+
+  disabled:cursor-not-allowed
+  disabled:bg-slate-50
+  disabled:text-slate-400
+`;
+
+
+/* ============================================================
+   INITIALS
+============================================================ */
 
 function getInitials(
   name: string
 ) {
-
   return name
     .trim()
     .split(/\s+/)
