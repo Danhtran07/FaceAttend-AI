@@ -48,7 +48,8 @@ class User(Base):
     )
 
     employee: Mapped["Employee | None"] = relationship(
-    "Employee",
-    back_populates="user",
-    uselist=False,
-)
+        "Employee",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

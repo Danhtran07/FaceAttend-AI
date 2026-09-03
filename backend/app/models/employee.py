@@ -12,7 +12,7 @@ class Employee(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
     )

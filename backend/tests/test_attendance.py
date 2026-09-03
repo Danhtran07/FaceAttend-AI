@@ -324,3 +324,19 @@ def test_delete_attendance_success(db_session, auth_headers, employee):
 
     assert response.status_code == 204
     assert response.content == b""
+
+
+def test_delete_user_with_employee_success(db_session, auth_headers, employee):
+    user = db_session.query(User).filter(
+        User.username == "employee_attendance_test"
+    ).one()
+
+    response = client.delete(
+        f"/api/users/{user.id}",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert db_session.query(User).filter(User.id == user.id).first() is None
+    assert db_session.query(Employee).filter(Employee.id == employee.id).first() is None
