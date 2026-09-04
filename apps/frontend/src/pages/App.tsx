@@ -138,48 +138,93 @@ export default function App() {
   };
 
   const progress = challenge === "COMPLETE" ? 100 : Math.max(0, Math.min(100, (challengeIndex / CHALLENGES.length) * 100));
+  const stateLabel = error ? "REVIEW REQUIRED" : token ? "VERIFIED" : running ? "LIVE CHECK" : "READY";
 
   return (
     <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
-          <div><span style={styles.eyebrow}>FACEATTEND</span><h1>Identity Verification</h1></div>
-          <span style={{ ...styles.badge, color: running ? "#5eead4" : "#94a3b8" }}>{running ? "LIVE" : "READY"}</span>
+          <div>
+            <span style={styles.eyebrow}>FACEATTEND / ATTENDANCE CONSOLE</span>
+            <h1 style={styles.title}>Verify attendance</h1>
+            <p style={styles.subtitle}>Live identity check before creating an attendance record.</p>
+          </div>
+          <span style={{ ...styles.badge, color: error ? "#fb7185" : token ? "#4ade80" : running ? "#67e8f9" : "#a1a1aa" }}>{stateLabel}</span>
         </header>
-        <div style={styles.cameraWrap}>
-          <video ref={videoRef} autoPlay playsInline muted style={styles.video} />
-          <div style={{ ...styles.oval, borderColor: error ? "#f87171" : challenge === "COMPLETE" ? "#34d399" : running ? "#38bdf8" : "#64748b" }} />
-          <canvas ref={canvasRef} style={{ display: "none" }} />
+        <div style={styles.workspace}>
+          <section style={styles.primaryPanel}>
+            <div style={styles.panelBar}>
+              <div><span style={styles.sectionKicker}>BIOMETRIC INPUT</span><h2 style={styles.panelTitle}>Camera verification</h2></div>
+              <span style={styles.sessionTag}>{running ? "SESSION ACTIVE" : "SESSION IDLE"}</span>
+            </div>
+            <div style={styles.cameraWrap}>
+              <video ref={videoRef} autoPlay playsInline muted style={styles.video} />
+              <div style={{ ...styles.oval, borderColor: error ? "#fb7185" : challenge === "COMPLETE" ? "#4ade80" : running ? "#67e8f9" : "#64748b" }} />
+              <div style={styles.cameraHint}>{running ? "Keep your face inside the frame" : "Camera preview"}</div>
+              <canvas ref={canvasRef} style={{ display: "none" }} />
+            </div>
+            <section style={styles.status}>
+              <span style={styles.sectionKicker}>CURRENT INSTRUCTION</span>
+              <strong style={{ ...styles.feedback, color: error ? "#fda4af" : token ? "#86efac" : "#f4f4f5" }}>{error || feedback}</strong>
+              <div style={styles.steps}>{CHALLENGES.map((label, index) => <div key={label} style={{ ...styles.step, color: index < challengeIndex ? "#4ade80" : index === challengeIndex ? "#67e8f9" : "#71717a" }}><span style={{ ...styles.dot, borderColor: index < challengeIndex ? "#4ade80" : index === challengeIndex ? "#67e8f9" : "#3f3f46" }}>{index < challengeIndex ? "DONE" : `0${index + 1}`}</span>{label}</div>)}</div>
+              <div style={styles.track}><div style={{ ...styles.progress, width: `${progress}%` }} /></div>
+            </section>
+            <button onClick={running ? cleanup : start} style={styles.button}>{running ? "Stop verification" : token ? "Run again" : "Start verification"}</button>
+            {token && <pre style={styles.token}>{token}</pre>}
+          </section>
+
+          <aside style={styles.rail}>
+            <div style={styles.railSection}>
+              <span style={styles.sectionKicker}>RECORD CONTEXT</span>
+              <div style={styles.recordRow}><span>Employee</span><strong>Pending match</strong></div>
+              <div style={styles.recordRow}><span>Employee ID</span><strong>Not assigned</strong></div>
+              <div style={styles.recordRow}><span>Attendance state</span><strong>{token ? "Ready to record" : "Awaiting verification"}</strong></div>
+            </div>
+            <div style={styles.railSection}>
+              <span style={styles.sectionKicker}>VERIFICATION SESSION</span>
+              <div style={styles.recordRow}><span>Method</span><strong>Face liveness</strong></div>
+              <div style={styles.recordRow}><span>Required checks</span><strong>2 gestures</strong></div>
+              <div style={styles.recordRow}><span>Service</span><strong>AI / 8001</strong></div>
+            </div>
+            <div style={styles.notice}><span style={styles.sectionKicker}>NEXT STEP</span><p>{token ? "Identity verified. The attendance event can now be persisted." : "Complete both head-turn checks to continue."}</p></div>
+            <small style={styles.endpoint}>AI service: {API_BASE}</small>
+          </aside>
         </div>
-        <section style={styles.status}>
-          <strong style={{ color: error ? "#fca5a5" : token ? "#86efac" : "#e2e8f0" }}>{error || feedback}</strong>
-          <div style={styles.steps}>{CHALLENGES.map((label, index) => <div key={label} style={{ ...styles.step, color: index < challengeIndex ? "#34d399" : index === challengeIndex ? "#60a5fa" : "#64748b" }}><span style={styles.dot}>{index < challengeIndex ? "OK" : index + 1}</span>{label}</div>)}</div>
-          <div style={styles.track}><div style={{ ...styles.progress, width: `${progress}%` }} /></div>
-        </section>
-        <button onClick={running ? cleanup : start} style={styles.button}>{running ? "Dừng xác minh" : token ? "Xác minh lại" : "Bắt đầu xác minh"}</button>
-        {token && <pre style={styles.token}>{token}</pre>}
-        <small style={styles.endpoint}>AI service: {API_BASE}</small>
       </section>
     </main>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { minHeight: "100vh", padding: 24, background: "radial-gradient(circle at top, #172554, #07090e 55%)", color: "#e2e8f0", fontFamily: "Georgia, 'Times New Roman', serif" },
-  shell: { width: "min(100%, 560px)", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
-  eyebrow: { color: "#5eead4", letterSpacing: 3, fontSize: 11, fontWeight: 700 },
-  badge: { border: "1px solid currentColor", borderRadius: 20, padding: "5px 10px", fontSize: 11, letterSpacing: 1 },
-  cameraWrap: { position: "relative", aspectRatio: "4 / 3", overflow: "hidden", background: "#020617", border: "1px solid #334155", borderRadius: 14 },
+  page: { minHeight: "100vh", padding: "clamp(20px, 4vw, 56px)", background: "#09090b", color: "#f4f4f5", fontFamily: "'Space Grotesk', 'Trebuchet MS', sans-serif" },
+  shell: { width: "min(100%, 1180px)", margin: "0 auto" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, marginBottom: 28 },
+  eyebrow: { color: "#67e8f9", letterSpacing: 2.4, fontSize: 10, fontWeight: 700 },
+  title: { margin: "8px 0 4px", fontSize: "clamp(28px, 4vw, 46px)", lineHeight: 1.05, letterSpacing: -1 },
+  subtitle: { margin: 0, color: "#a1a1aa", fontSize: 14 },
+  badge: { border: "1px solid currentColor", borderRadius: 999, padding: "8px 12px", fontSize: 10, letterSpacing: 1.2, fontWeight: 700, whiteSpace: "nowrap" },
+  workspace: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16, alignItems: "start" },
+  primaryPanel: { padding: 18, background: "#111113", border: "1px solid #27272a", borderRadius: 18 },
+  panelBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
+  sectionKicker: { display: "block", color: "#71717a", fontSize: 10, letterSpacing: 1.5, fontWeight: 700 },
+  panelTitle: { margin: "5px 0 0", fontSize: 20, fontWeight: 600 },
+  sessionTag: { color: "#a1a1aa", fontSize: 10, letterSpacing: 1, paddingTop: 5 },
+  cameraWrap: { position: "relative", aspectRatio: "16 / 10", overflow: "hidden", background: "#050506", border: "1px solid #3f3f46", borderRadius: 12 },
   video: { width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" },
-  oval: { position: "absolute", inset: "14% 28%", border: "3px solid", borderRadius: "50%", boxShadow: "0 0 30px rgba(56,189,248,.15)" },
-  status: { marginTop: 16, padding: 18, background: "rgba(15,23,42,.8)", border: "1px solid #1e293b", borderRadius: 14, textAlign: "center" },
-  steps: { display: "flex", justifyContent: "space-around", gap: 8, marginTop: 18 },
-  step: { display: "grid", gap: 6, justifyItems: "center", fontSize: 12 },
-  dot: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: "50%", background: "#1e293b", fontSize: 10 },
-  track: { height: 4, marginTop: 18, background: "#1e293b", borderRadius: 2, overflow: "hidden" },
-  progress: { height: "100%", background: "#38bdf8", transition: "width .2s" },
-  button: { width: "100%", marginTop: 16, padding: "14px 18px", border: 0, borderRadius: 10, background: "#5eead4", color: "#042f2e", fontSize: 16, fontWeight: 700, cursor: "pointer" },
-  token: { marginTop: 14, padding: 14, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#86efac", background: "#052e16", border: "1px solid #166534", borderRadius: 10, fontSize: 11 },
-  endpoint: { display: "block", marginTop: 14, color: "#64748b", textAlign: "center", fontFamily: "monospace" },
+  oval: { position: "absolute", inset: "12% 35%", border: "2px solid", borderRadius: "50%", boxShadow: "0 0 0 999px rgba(0,0,0,.08)" },
+  cameraHint: { position: "absolute", bottom: 12, left: 16, color: "#d4d4d8", fontSize: 11, background: "rgba(9,9,11,.72)", padding: "6px 8px", borderRadius: 5 },
+  status: { marginTop: 14, padding: "16px 4px 2px", textAlign: "left" },
+  feedback: { display: "block", marginTop: 7, fontSize: 18, fontWeight: 500 },
+  steps: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 20 },
+  step: { display: "flex", alignItems: "center", gap: 9, fontSize: 13 },
+  dot: { display: "grid", placeItems: "center", width: 42, height: 26, border: "1px solid", borderRadius: 5, background: "#18181b", fontSize: 9, fontWeight: 700, letterSpacing: .8 },
+  track: { height: 4, marginTop: 18, background: "#27272a", borderRadius: 2, overflow: "hidden" },
+  progress: { height: "100%", background: "#67e8f9", transition: "width .2s" },
+  button: { width: "100%", marginTop: 20, padding: "13px 18px", border: "1px solid #67e8f9", borderRadius: 7, background: "#67e8f9", color: "#082f49", fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  token: { marginTop: 14, padding: 14, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#86efac", background: "#052e16", border: "1px solid #166534", borderRadius: 8, fontSize: 11 },
+  rail: { background: "#111113", border: "1px solid #27272a", borderRadius: 18, overflow: "hidden" },
+  railSection: { padding: 18, borderBottom: "1px solid #27272a" },
+  recordRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "13px 0", borderBottom: "1px solid #1f1f22", fontSize: 12 },
+  notice: { margin: 14, padding: 14, background: "#17202a", border: "1px solid #164e63", borderRadius: 8 },
+  endpoint: { display: "block", margin: "0 18px 18px", color: "#52525b", fontSize: 10, fontFamily: "monospace" },
 };
