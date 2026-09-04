@@ -1,11 +1,10 @@
-# FaceAttend AI
+# FaceAttend
 
 ## Project Overview
 
-AI-powered Face Recognition Attendance System.
+Face Recognition Attendance System.
 
 ## Team
-
 - Khoa — AI Engineer
 - Danh — Backend Engineer
 - Tín — Frontend Engineer
@@ -19,11 +18,6 @@ Frontend:
 Backend:
 - FastAPI
 - Python
-
-AI:
-- InsightFace
-- SCRFD
-- ArcFace
 
 Database:
 - PostgreSQL
@@ -39,23 +33,28 @@ This repository is a monorepo organized under a standard `apps/` folder:
 
 Each service contains its own app entrypoint and can run independently.
 
-## Local Development
+## Run With Docker (recommended)
 
-Backend:
+Requirements: Docker Desktop with Compose, Node.js 18 or newer, and Git.
+
+From the repository root:
 
 ```
-cd apps/backend
-uvicorn app.main:app --reload
+copy .env.example .env
+docker compose up -d --build
 ```
 
-AI service:
+The backend waits for PostgreSQL and runs the Alembic migrations automatically.
+The services are available at:
 
 ```
 cd apps/ai-service
 uvicorn app.main:app --reload --port 8001
 ```
+- Backend: http://localhost:8000
+- Backend health: http://localhost:8000/health
 
-Frontend:
+Run the frontend in a second terminal:
 
 ```
 cd apps/frontend
@@ -63,12 +62,50 @@ npm install
 npm run dev
 ```
 
-## Docker
+Open http://localhost:5173. Vite proxies `/api` requests to the backend, so no
+frontend API URL configuration is required for local development.
 
-From repository root:
+JWT configuration belongs only in the backend environment. Never put
+`JWT_SECRET_KEY` in frontend env files or commit the real `.env` file. For a
+shared or production environment, replace the example secret with a random
+value, for example:
 
 ```
-docker compose up --build
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Set the generated value as `JWT_SECRET_KEY` in `.env`. Keep the same secret for
+all backend instances that need to validate each other's tokens. Changing it
+invalidates existing login sessions.
+
+Useful commands:
+
+```
+docker compose ps
+docker compose logs -f backend
+docker compose down
+```
+
+If port `8000` is already in use, change `BACKEND_PORT` in `.env`. Do not change
+the internal Docker values `POSTGRES_HOST=postgres` or `DATABASE_URL`.
+
+## Run Services Without Docker
+
+For manual development, use a local PostgreSQL instance and set `DATABASE_URL`
+accordingly. Then run:
+
+```
+cd backend
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+```
+
+In another terminal:
+
+```
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Current Status
@@ -284,3 +321,5 @@ Centralized FastAPI exception handling (`app/core/errors.py`) returns a uniform 
 
 Responses never include stack traces, raw images, full embeddings, secrets, JWT, or database connection details. Server logs keep request path/method and error code for debugging without logging sensitive payloads.
 
+The backend integration includes authentication, users, employees, attendance,
+database migrations, and health endpoints.
