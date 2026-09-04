@@ -6,6 +6,7 @@ from models import ChallengeType, SessionState, CHALLENGE_SEQUENCE
 
 SESSION_TTL_SECONDS = 120  # 2 minutes to complete all challenges
 MAX_FRAME_HASHES = 20       # Rolling window for replay detection
+SPOOF_FRAMES_REQUIRED = 5   # Avoid rejecting a real face on one unstable frame
 
 
 class Session:
@@ -18,6 +19,7 @@ class Session:
         self.liveness_token: str | None = None
         self.smile_photo_path: str | None = None
         self.waiting_for_neutral: bool = False  # must return to forward-facing before next challenge
+        self.spoof_consecutive_count = 0
         self.created_at = time.monotonic()
         self.frame_hashes: list[str] = []
 

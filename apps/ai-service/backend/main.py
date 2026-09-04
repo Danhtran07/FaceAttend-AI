@@ -45,7 +45,7 @@ from models import (
 )
 from challenge_evaluator import is_neutral, evaluate_challenge
 from liveness_engine import LivenessEngine
-from session_manager import session_manager
+from session_manager import session_manager, SPOOF_FRAMES_REQUIRED
 from face_recognition_engine import FaceRecognitionEngine, SIMILARITY_THRESHOLD
 from face_db import face_db
 from emotion_engine import blendshapes_to_emotions, dominant_emotion
@@ -263,15 +263,6 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                                      FaceMetrics(face_detected=False))
                 break
 
-            # Replay attack check
-            if session.is_replay_frame(frame_bytes):
-                session.state = SessionState.FAILED
-                await _send_response(websocket, session_id, ChallengeType.FAILED,
-                                     session.challenges_completed, False,
-                                     "Replay attack detected. Session terminated.",
-                                     FaceMetrics(face_detected=False))
-                break
-
             # Process frame with MediaPipe
             metrics = engine.process_frame(frame_bytes)
 
@@ -342,6 +333,11 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                 continue
 
             if metrics.is_spoof:
+                session.spoof_consecutive_count += 1
+            else:
+                session.spoof_consecutive_count = 0
+
+            if session.spoof_consecutive_count >= SPOOF_FRAMES_REQUIRED:
                 session.state = SessionState.FAILED
                 await _send_response(websocket, session_id, ChallengeType.FAILED,
                                      session.challenges_completed, False,

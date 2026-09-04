@@ -1,7 +1,7 @@
 // liveness_client.js — WebSocket client and UI state machine
 
-const API_BASE = "http://localhost:8000";
-const WS_BASE  = "ws://localhost:8000";
+const API_BASE = "http://localhost:8001";
+const WS_BASE  = "ws://localhost:8001";
 
 const startBtn     = document.getElementById("start-btn");
 const feedbackText = document.getElementById("feedback-text");
@@ -9,8 +9,8 @@ const faceOval     = document.getElementById("face-oval");
 const progressBar  = document.getElementById("progress-bar");
 const tokenBox     = document.getElementById("token-box");
 
-const STEPS = [0, 1, 2];
-const TOTAL_CHALLENGES = 3;
+const STEPS = [0, 1];
+const TOTAL_CHALLENGES = 2;
 
 let ws = null;
 
@@ -19,6 +19,7 @@ startBtn.addEventListener("click", async () => {
   tokenBox.style.display = "none";
   tokenBox.textContent = "";
   resetStepUI();
+  stopCamera();
 
   try {
     await startCamera();
@@ -105,7 +106,11 @@ function handleServerMessage(data) {
 
   if (challenge === "FAILED") {
     setOvalState("error");
-    cleanup();
+    stopCapture();
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
     startBtn.textContent = "Try Again";
     startBtn.disabled = false;
     return;

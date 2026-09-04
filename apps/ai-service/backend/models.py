@@ -21,7 +21,7 @@ class SessionState(str, Enum):
     EXPIRED    = "EXPIRED"
 
 
-CHALLENGE_SEQUENCE = [ChallengeType.TURN_LEFT, ChallengeType.TURN_RIGHT, ChallengeType.SMILE]
+CHALLENGE_SEQUENCE = [ChallengeType.TURN_LEFT, ChallengeType.TURN_RIGHT]
 
 CHALLENGE_INSTRUCTIONS = {
     ChallengeType.TURN_LEFT:  "Slowly turn your head to the LEFT",

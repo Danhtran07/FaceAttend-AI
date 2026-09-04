@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 const API_BASE = import.meta.env.VITE_AI_URL || "http://localhost:8001";
-const CHALLENGES = ["Turn Left", "Turn Right", "Smile"];
+const CHALLENGES = ["Turn Left", "Turn Right"];
 
 type ServerMessage = {
   challenge?: string;
@@ -23,14 +23,16 @@ export default function App() {
   const [challenge, setChallenge] = useState("");
   const [token, setToken] = useState("");
 
-  const cleanup = () => {
+  const cleanup = (stopStream = true) => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     timerRef.current = null;
     socketRef.current?.close();
     socketRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (stopStream) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+    }
     setRunning(false);
   };
 
@@ -45,6 +47,13 @@ export default function App() {
     setChallenge("");
     setFeedback("Đang mở camera...");
     try {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API không được hỗ trợ trên trình duyệt này.");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
@@ -55,7 +64,9 @@ export default function App() {
       await videoRef.current.play();
 
       const response = await fetch(`${API_BASE}/session/create`, { method: "POST" });
-      if (!response.ok) throw new Error(`Session failed (${response.status})`);
+      if (!response.ok) {
+        throw new Error(`AI session creation failed (${response.status})`);
+      }
       const session = await response.json();
       const socket = new WebSocket(`${API_BASE.replace(/^http/, "ws")}/ws/liveness/${session.session_id}`);
       socket.binaryType = "arraybuffer";
@@ -100,23 +111,33 @@ export default function App() {
           cleanup();
         } else if (data.challenge === "FAILED") {
           setError(data.feedback || "Xác minh thất bại");
-          cleanup();
+          cleanup(false);
         }
       };
       socket.onerror = () => {
-        setError("Không kết nối được AI service. Kiểm tra localhost:8001.");
+        setError("WebSocket AI liveness không kết nối. Kiểm tra AI service tại localhost:8001.");
         cleanup();
       };
     } catch (reason) {
       cleanup();
-      setError(reason instanceof Error && reason.message.includes("Permission")
-        ? "Trình duyệt chưa được cấp quyền camera."
-        : "Không thể khởi động camera hoặc AI service.");
+      const message = reason instanceof Error ? reason.message : "Không xác định";
+      console.error("Camera/AI startup failed:", reason);
+
+      if (message.includes("Permission") || message.includes("NotAllowedError") || message.includes("camera")) {
+        setError("Trình duyệt chưa được cấp quyền camera. Cho phép truy cập camera và thử lại.");
+      } else if (message.includes("session") || message.includes("Session failed") || message.includes("AI session")) {
+        setError("Không tạo được phiên xác minh trên AI service. Kiểm tra http://localhost:8001/health");
+      } else if (message.includes("WebSocket") || message.includes("localhost:8001")) {
+        setError("Không kết nối được AI service qua WebSocket. Kiểm tra port 8001.");
+      } else {
+        setError(`Không thể khởi động camera hoặc AI service. Chi tiết: ${message}`);
+      }
+
       setFeedback("Chưa bắt đầu xác minh");
     }
   };
 
-  const progress = challenge === "COMPLETE" ? 100 : Math.max(0, Math.min(100, (challengeIndex / 3) * 100));
+  const progress = challenge === "COMPLETE" ? 100 : Math.max(0, Math.min(100, (challengeIndex / CHALLENGES.length) * 100));
 
   return (
     <main style={styles.page}>
