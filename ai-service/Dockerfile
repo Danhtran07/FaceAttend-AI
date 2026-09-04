@@ -1,19 +1,38 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
+
+# System deps needed by OpenCV, InsightFace, MediaPipe
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libegl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt ./
+# Install Python deps first (cached layer)
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
-RUN python download_models.py || true
+# Download MediaPipe FaceLandmarker model
+RUN curl -fsSL -o face_landmarker.task \
+    https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 
-EXPOSE 8001
+# Pre-download InsightFace buffalo_l (~500MB) so first startup isn't slow
+RUN python3 -c "from insightface.app import FaceAnalysis; FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']).prepare(ctx_id=-1)" \
+    || echo "InsightFace pre-download failed — will retry at runtime"
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Copy application code
+COPY backend/ .
+
+# MediaPipe FaceLandmarker loads this shared library at application startup.
+RUN apt-get update && apt-get install -y libgles2 \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

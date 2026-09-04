@@ -146,6 +146,21 @@ class AnalyzeRequest(BaseModel):
     image: str              # base64 JPEG
 
 
+class LegacyEnrollRequest(BaseModel):
+    image: str
+
+
+class LegacyRecognizeCandidate(BaseModel):
+    employee_id: int
+    embedding: list[float]
+
+
+class LegacyRecognizeRequest(BaseModel):
+    image: str
+    candidates: list[LegacyRecognizeCandidate] = []
+    threshold: float = 0.5
+
+
 class EmotionScores(BaseModel):
     happy: float = 0.0
     sad: float = 0.0

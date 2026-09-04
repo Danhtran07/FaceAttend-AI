@@ -5,6 +5,7 @@ import time
 import asyncio
 import logging
 import dataclasses
+import numpy as np
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,7 @@ from models import (
     VerifyFaceRequest, VerifyFaceResponse,
     SearchFaceRequest, SearchFaceResponse, SearchMatch, FaceRecordResponse,
     AnalyzeRequest, AnalyzeResponse, EmotionScores,
+    LegacyEnrollRequest, LegacyRecognizeRequest,
 )
 from challenge_evaluator import is_neutral, evaluate_challenge
 from liveness_engine import LivenessEngine
@@ -547,6 +549,67 @@ def delete_face(face_id: str):
 
 
 # ── Face Analysis route ───────────────────────────────────────────────────────
+
+@app.post("/face/enroll")
+def legacy_enroll(body: LegacyEnrollRequest):
+    """Compatibility route for the existing FaceAttend frontend."""
+    try:
+        img_bytes = base64.b64decode(body.image)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image")
+
+    result = rec_engine.analyze(img_bytes)
+    if not result.face_detected or result.embedding is None:
+        return {"success": False, "error_code": "NO_FACE", "message": "No face detected"}
+    return {
+        "success": True,
+        "embedding": result.embedding.astype(float).tolist(),
+        "bbox": result.bbox,
+        "detection_confidence": result.detection_score,
+    }
+
+
+@app.post("/face/recognize")
+def legacy_recognize(body: LegacyRecognizeRequest):
+    """Compatibility route using caller-provided ArcFace gallery vectors."""
+    try:
+        img_bytes = base64.b64decode(body.image)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image")
+
+    result = rec_engine.analyze(img_bytes)
+    if not result.face_detected or result.embedding is None:
+        return {"success": False, "error_code": "NO_FACE", "message": "No face detected"}
+
+    query = np.asarray(result.embedding, dtype=np.float32)
+    best_id = None
+    best_similarity = -1.0
+    for candidate in body.candidates:
+        embedding = np.asarray(candidate.embedding, dtype=np.float32)
+        if embedding.shape != query.shape:
+            continue
+        norm = np.linalg.norm(embedding)
+        if norm == 0:
+            continue
+        similarity = float(np.dot(query, embedding / norm))
+        if similarity > best_similarity:
+            best_id = candidate.employee_id
+            best_similarity = similarity
+
+    if best_id is not None and best_similarity >= body.threshold:
+        return {
+            "success": True,
+            "recognized": True,
+            "employee_id": best_id,
+            "confidence": round(best_similarity, 4),
+        }
+    return {
+        "success": False,
+        "recognized": False,
+        "error_code": "UNKNOWN_FACE",
+        "message": "No matching employee",
+        "confidence": round(max(best_similarity, 0.0), 4),
+    }
 
 @app.post("/face/analyze", response_model=AnalyzeResponse)
 def analyze_face(body: AnalyzeRequest):
