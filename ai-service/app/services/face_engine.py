@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -10,6 +12,18 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AIServiceError, ErrorCode
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_temp_on_data_drive() -> None:
+    """Prefer D: temp when C: is nearly full (common Windows MemoryError cause)."""
+    temp_dir = Path("D:/tmp")
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["TMP"] = str(temp_dir)
+        os.environ["TEMP"] = str(temp_dir)
+        os.environ["TMPDIR"] = str(temp_dir)
+    except Exception:
+        logger.warning("Could not set TEMP to D:/tmp; using system default")
 
 
 @dataclass
@@ -41,18 +55,31 @@ class FaceEngine:
                 status_code=500,
             ) from exc
 
+        _ensure_temp_on_data_drive()
+
         try:
+            # detection provides 5-point landmarks; recognition = ArcFace.
+            # Skip heavy landmark/gender packs to reduce RAM on low-disk machines.
             app = FaceAnalysis(
                 name=self.settings.model_name,
+                root=self.settings.insightface_root,
+                allowed_modules=["detection", "recognition"],
                 providers=["CPUExecutionProvider"],
             )
             app.prepare(ctx_id=-1, det_size=(640, 640))
             self._app = app
-            logger.info("Loaded InsightFace model: %s", self.settings.model_name)
+            logger.info(
+                "Loaded InsightFace model=%s root=%s modules=%s",
+                self.settings.model_name,
+                self.settings.insightface_root,
+                list(app.models.keys()),
+            )
         except Exception as exc:
             raise AIServiceError(
                 ErrorCode.MODEL_ERROR,
-                f"Failed to load InsightFace model: {exc}",
+                "Failed to load InsightFace model. Re-download buffalo_l if ONNX files are corrupted, "
+                "and free disk space on C: (or keep models on D:).",
+                details={"reason": type(exc).__name__},
                 status_code=500,
             ) from exc
 

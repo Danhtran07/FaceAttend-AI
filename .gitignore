@@ -25,6 +25,7 @@ models/
 *.onnx
 *.pth
 *.pt
+.insightface/
 
 # Logs
 *.log
