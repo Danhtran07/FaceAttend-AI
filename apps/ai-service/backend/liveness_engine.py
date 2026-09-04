@@ -130,6 +130,25 @@ class LivenessEngine:
         right = bs.get("mouthSmileRight", 0.0)
         return float((left + right) / 2)
 
+    def _spoof_decision(self, texture_var: float, z_std: float, face_width: int, face_height: int) -> bool:
+        """Reject spoof only when the face crop is large enough and the texture/depth signal is clearly implausible."""
+        if face_width < 80 or face_height < 80:
+            return False
+
+        texture_low = texture_var < SPOOF_TEXTURE_MIN
+        z_low = z_std < SPOOF_Z_STD_MIN
+
+        # Tiny real faces and small webcam crops often look artificially low-texture.
+        # Require a plausible face size before rejecting as spoof.
+        if face_width < 120 or face_height < 120:
+            return False
+
+        # Strong spoof signal: both low texture and low depth variance at a realistic face scale.
+        if texture_low and z_low:
+            return texture_var < 25.0 and z_std < 0.006
+
+        return False
+
     def _check_spoof(self, frame, landmarks, w: int, h: int):
         xs = [lm.x for lm in landmarks]
         ys = [lm.y for lm in landmarks]
@@ -148,7 +167,9 @@ class LivenessEngine:
         z_values = [lm.z for lm in landmarks]
         z_std = float(np.std(z_values))
 
-        is_spoof = (texture_var < SPOOF_TEXTURE_MIN) or (z_std < SPOOF_Z_STD_MIN)
+        face_width = max(1, x2 - x1)
+        face_height = max(1, y2 - y1)
+        is_spoof = self._spoof_decision(texture_var, z_std, face_width, face_height)
         return texture_var, z_std, is_spoof
 
     def extract_forehead_rgb(self, frame, landmarks, w: int, h: int):

@@ -37,6 +37,8 @@ export default function App() {
   useEffect(() => cleanup, []);
 
   const start = async () => {
+    if (running || socketRef.current || timerRef.current !== null) return;
+
     setError("");
     setToken("");
     setChallengeIndex(-1);
@@ -58,22 +60,34 @@ export default function App() {
       const socket = new WebSocket(`${API_BASE.replace(/^http/, "ws")}/ws/liveness/${session.session_id}`);
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
+
+      const captureLoop = () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas) return;
+        if (socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) return;
+        if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (!blob || socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) return;
+          void blob.arrayBuffer().then((buffer) => {
+            if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(buffer);
+            }
+          }).catch(() => undefined);
+        }, "image/jpeg", 0.75);
+      };
+
       socket.onopen = () => {
         setRunning(true);
         setFeedback("Đặt khuôn mặt vào giữa khung hình...");
-        timerRef.current = window.setInterval(() => {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          if (!video || !canvas || socket.readyState !== WebSocket.OPEN || video.readyState < 2) return;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const context = canvas.getContext("2d");
-          if (!context) return;
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => {
-            if (blob) void blob.arrayBuffer().then((buffer) => socket.send(buffer));
-          }, "image/jpeg", 0.8);
-        }, 1000 / 15);
+        timerRef.current = window.setInterval(captureLoop, 1000 / 15);
       };
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data) as ServerMessage;

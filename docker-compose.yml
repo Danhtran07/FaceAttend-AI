@@ -14,7 +14,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./apps/backend
     env_file: .env
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -23,7 +23,7 @@ services:
 
   ai-service:
     build:
-      context: ./ai-service
+      context: ./apps/ai-service
     env_file: .env
     ports:
       - "${AI_SERVICE_PORT:-8001}:8000"

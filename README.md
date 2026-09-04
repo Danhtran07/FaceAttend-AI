@@ -30,35 +30,35 @@ Database:
 
 ## Project Structure
 
-This repository is a monorepo with three main services:
+This repository is a monorepo organized under a standard `apps/` folder:
 
-- `backend/` — FastAPI backend service (Danh)
-- `ai-service/` — AI model service (Khoa)
-- `frontend/` — Vite + React frontend (Tín)
-- `database/` — database migrations and schema
+- `apps/backend/` — FastAPI backend service (Danh)
+- `apps/ai-service/` — AI model service (Khoa)
+- `apps/frontend/` — Vite + React frontend (Tín)
+- `database/` — database migrations and schema (if added later)
 
-Each service contains a minimal skeleton and a `/health` endpoint.
+Each service contains its own app entrypoint and can run independently.
 
 ## Local Development
 
 Backend:
 
 ```
-cd backend
+cd apps/backend
 uvicorn app.main:app --reload
 ```
 
 AI service:
 
 ```
-cd ai-service
+cd apps/ai-service
 uvicorn app.main:app --reload --port 8001
 ```
 
 Frontend:
 
 ```
-cd frontend
+cd apps/frontend
 npm install
 npm run dev
 ```
