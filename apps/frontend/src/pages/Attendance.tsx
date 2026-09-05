@@ -51,6 +51,15 @@ function formatDateTime(value: string | null) {
 }
 
 export default function Attendance() {
+  const storedUser = localStorage.getItem("user");
+  let isAdmin = false;
+
+  try {
+    isAdmin = JSON.parse(storedUser || "{}").role === "ADMIN";
+  } catch {
+    isAdmin = false;
+  }
+
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
@@ -273,14 +282,16 @@ export default function Attendance() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreate}
-          disabled={employees.length === 0}
-          className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          + Add Attendance
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={employees.length === 0}
+            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            + Add Attendance
+          </button>
+        )}
       </div>
 
       {/* Alerts */}
@@ -454,27 +465,29 @@ export default function Attendance() {
                       </td>
 
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEdit(item)
-                            }
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            Edit
-                          </button>
+                        {isAdmin && (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openEdit(item)
+                              }
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDelete(item.id)
-                            }
-                            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDelete(item.id)
+                              }
+                              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -486,7 +499,7 @@ export default function Attendance() {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {isAdmin && showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

@@ -369,6 +369,12 @@ def create_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employees can only record attendance through face recognition",
+        )
+
     employee = (
         db.query(Employee)
         .filter(Employee.id == payload.employee_id)
@@ -451,6 +457,12 @@ def update_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employees cannot manually update attendance",
+        )
+
     attendance = (
         db.query(Attendance)
         .filter(Attendance.id == attendance_id)
@@ -507,6 +519,12 @@ def delete_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employees cannot manually delete attendance",
+        )
+
     attendance = (
         db.query(Attendance)
         .filter(Attendance.id == attendance_id)
