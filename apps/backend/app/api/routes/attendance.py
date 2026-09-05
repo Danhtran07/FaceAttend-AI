@@ -1,4 +1,5 @@
 import calendar
+import base64
 from datetime import date, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,13 +10,27 @@ from app.api.dependencies.auth import get_current_user
 from app.core.database import get_db
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
+from app.models.face_data import FaceData
 from app.models.user import User, UserRole
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceCalendarResponse,
     AttendanceCalendarDay,
     AttendanceResponse,
+    AttendanceRecognitionRequest,
     AttendanceUpdate,
+)
+from app.schemas.ai import AIRecognitionCandidate
+from app.services.ai_client import (
+    AIRecognitionClient,
+    AIServiceResponseError,
+    AIServiceTimeoutError,
+    AIServiceUnavailableError,
+)
+from app.services.attendance_recognition import (
+    AttendancePersistenceError,
+    RecognitionRejectedError,
+    record_recognition_attendance,
 )
 
 
@@ -36,6 +51,14 @@ def _compute_status(check_in, check_out=None, explicit_status=None):
         return AttendanceStatus.LATE
 
     return AttendanceStatus.PRESENT
+
+
+def _get_ai_client():
+    client = AIRecognitionClient()
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _get_employee_for_current_user(db: Session, current_user: User):
@@ -156,6 +179,56 @@ def get_attendance(
         )
 
     return db.query(Attendance).all()
+
+
+@router.post(
+    "/recognize",
+    response_model=AttendanceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def recognize_attendance(
+    payload: AttendanceRecognitionRequest,
+    db: Session = Depends(get_db),
+    ai_client: AIRecognitionClient = Depends(_get_ai_client),
+    current_user: User = Depends(get_current_user),
+):
+    del current_user
+    try:
+        image = payload.image.split(",", 1)[-1]
+        image_bytes = base64.b64decode(image, validate=True)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid base64 image",
+        )
+
+    candidates = [
+        AIRecognitionCandidate(
+            employee_id=face_data.employee_id,
+            embedding=face_data.embedding,
+        )
+        for face_data in db.query(FaceData).all()
+    ]
+
+    try:
+        recognition = ai_client.recognize(
+            image_bytes,
+            candidates,
+            liveness_session_id=payload.liveness_session_id,
+        )
+    except AIServiceTimeoutError as exc:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
+    except AIServiceUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except AIServiceResponseError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    try:
+        return record_recognition_attendance(db, recognition)
+    except RecognitionRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except AttendancePersistenceError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 @router.get(
