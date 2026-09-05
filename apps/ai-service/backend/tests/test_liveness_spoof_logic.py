@@ -39,6 +39,33 @@ def test_blink_challenge_does_not_pass_without_blink_signal():
     assert count == 0
 
 
+def test_blink_challenge_accepts_a_normal_webcam_closure_score():
+    metrics = FaceMetrics(face_detected=True, blink_score=0.25)
+
+    passed, count = evaluate_challenge(ChallengeType.BLINK, metrics, 0)
+
+    assert passed is True
+    assert count == 1
+
+
+def test_smile_challenge_accepts_a_clear_smile():
+    metrics = FaceMetrics(face_detected=True, smile_score=0.6)
+
+    passed, count = evaluate_challenge(ChallengeType.SMILE, metrics, 19)
+
+    assert passed is True
+    assert count == 20
+
+
+def test_mouth_open_challenge_accepts_a_clear_mouth_open_score():
+    metrics = FaceMetrics(face_detected=True, mouth_open_score=0.3)
+
+    passed, count = evaluate_challenge(ChallengeType.MOUTH_OPEN, metrics, 19)
+
+    assert passed is True
+    assert count == 20
+
+
 def test_low_light_frame_does_not_pass_liveness_challenge():
     metrics = FaceMetrics(face_detected=True, lighting_mean=18.0, is_low_light=True)
 

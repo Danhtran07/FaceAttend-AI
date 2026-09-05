@@ -31,7 +31,15 @@ NEUTRAL_THRESHOLD    =  0.15   # within ±0.15 counts as "facing forward"
 
 # Smile blendshape threshold (0–1 score from MediaPipe)
 SMILE_SCORE_THRESHOLD = 0.5
-BLINK_SCORE_THRESHOLD = 0.35
+# Webcam frames often under-report MediaPipe eye closure scores. Keep this
+# above neutral noise while allowing a natural blink to pass reliably.
+BLINK_SCORE_THRESHOLD = 0.25
+MOUTH_OPEN_SCORE_THRESHOLD = 0.25
+
+UPPER_INNER_LIP = 13
+LOWER_INNER_LIP = 14
+LEFT_MOUTH_CORNER = 78
+RIGHT_MOUTH_CORNER = 308
 
 SPOOF_TEXTURE_MIN = 50.0
 SPOOF_Z_STD_MIN   = 0.008
@@ -79,6 +87,7 @@ class LivenessEngine:
         yaw_proxy   = self._compute_yaw_proxy(landmarks)
         blink_score = self._compute_blink_score(result, landmarks)
         smile_score = self._compute_smile_score(result)
+        mouth_open_score = self._compute_mouth_open_score(result, landmarks)
         lighting_mean = self._compute_lighting_mean(frame, landmarks, w, h)
         texture_var, z_std, is_spoof = self._check_spoof(frame, landmarks, w, h)
         forehead    = self.extract_forehead_rgb(frame, landmarks, w, h)
@@ -89,6 +98,7 @@ class LivenessEngine:
             yaw_proxy=round(yaw_proxy, 4),
             blink_score=round(blink_score, 4),
             smile_score=round(smile_score, 4),
+            mouth_open_score=round(mouth_open_score, 4),
             lighting_mean=round(lighting_mean, 2),
             is_low_light=lighting_mean < LOW_LIGHT_MEAN,
             texture_variance=round(texture_var, 2),
@@ -138,6 +148,23 @@ class LivenessEngine:
         left  = bs.get("mouthSmileLeft",  0.0)
         right = bs.get("mouthSmileRight", 0.0)
         return float((left + right) / 2)
+
+    def _compute_mouth_open_score(self, result, landmarks) -> float:
+        """Combine jaw-open blendshape and normalized inner-lip distance."""
+        bs = self.extract_blendshapes(result)
+        blendshape_score = bs.get("jawOpen", 0.0)
+        mouth_width = np.hypot(
+            landmarks[LEFT_MOUTH_CORNER].x - landmarks[RIGHT_MOUTH_CORNER].x,
+            landmarks[LEFT_MOUTH_CORNER].y - landmarks[RIGHT_MOUTH_CORNER].y,
+        )
+        if mouth_width <= 1e-6:
+            return float(blendshape_score)
+        mouth_height = np.hypot(
+            landmarks[UPPER_INNER_LIP].x - landmarks[LOWER_INNER_LIP].x,
+            landmarks[UPPER_INNER_LIP].y - landmarks[LOWER_INNER_LIP].y,
+        )
+        geometric_score = float(np.clip((mouth_height / mouth_width - 0.05) / 0.15, 0.0, 1.0))
+        return float(max(blendshape_score, geometric_score))
 
     def _compute_blink_score(self, result, landmarks) -> float:
         """Combine MediaPipe eye closure scores with geometric eye openness."""

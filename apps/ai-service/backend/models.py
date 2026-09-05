@@ -10,6 +10,7 @@ class ChallengeType(str, Enum):
     TURN_RIGHT = "TURN_RIGHT"
     BLINK      = "BLINK"
     SMILE      = "SMILE"
+    MOUTH_OPEN = "MOUTH_OPEN"
     COMPLETE   = "COMPLETE"
     FAILED     = "FAILED"
 
@@ -25,14 +26,15 @@ class SessionState(str, Enum):
 CHALLENGE_SEQUENCE = [
     ChallengeType.TURN_LEFT,
     ChallengeType.TURN_RIGHT,
-    ChallengeType.BLINK,
+    ChallengeType.MOUTH_OPEN,
 ]
 
 CHALLENGE_INSTRUCTIONS = {
     ChallengeType.TURN_LEFT:  "Slowly turn your head to the LEFT",
     ChallengeType.TURN_RIGHT: "Now turn your head to the RIGHT",
     ChallengeType.BLINK:      "Please blink slowly",
-    ChallengeType.SMILE:      "Great! Now give us a big SMILE",
+    ChallengeType.SMILE:      "Now give us a big SMILE",
+    ChallengeType.MOUTH_OPEN: "Open your mouth slightly",
     ChallengeType.COMPLETE:   "Verification complete!",
     ChallengeType.FAILED:     "Verification failed. Please try again.",
 }
@@ -43,6 +45,7 @@ class FaceMetrics(BaseModel):
     yaw_proxy: float = 0.0
     blink_score: float = 0.0
     smile_score: float = 0.0
+    mouth_open_score: float = 0.0
     lighting_mean: float = 0.0
     is_low_light: bool = False
     texture_variance: float = 0.0

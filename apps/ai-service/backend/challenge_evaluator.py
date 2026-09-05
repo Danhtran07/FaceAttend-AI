@@ -2,6 +2,7 @@ from models import ChallengeType, FaceMetrics
 from liveness_engine import (
     TURN_LEFT_THRESHOLD, TURN_RIGHT_THRESHOLD,
     NEUTRAL_THRESHOLD, SMILE_SCORE_THRESHOLD, BLINK_SCORE_THRESHOLD,
+    MOUTH_OPEN_SCORE_THRESHOLD,
 )
 
 # Frames that must pass consecutively to complete a challenge (~1.3s at 15fps)
@@ -50,5 +51,8 @@ def _frame_passes_challenge(challenge: ChallengeType, metrics: FaceMetrics) -> b
 
     if challenge == ChallengeType.BLINK:
         return metrics.blink_score >= BLINK_SCORE_THRESHOLD
+
+    if challenge == ChallengeType.MOUTH_OPEN:
+        return metrics.mouth_open_score >= MOUTH_OPEN_SCORE_THRESHOLD
 
     return False

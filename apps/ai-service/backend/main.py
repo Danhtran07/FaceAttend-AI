@@ -361,27 +361,6 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                                      metrics)
                 break
 
-            if session.awaiting_rppg:
-                if rppg.ready and metrics.rppg_is_live is True:
-                    session.awaiting_rppg = False
-                    session.state = SessionState.COMPLETE
-                    token = _issue_liveness_token(session_id)
-                    session.liveness_token = token
-                    await _send_response(
-                        websocket, session_id, ChallengeType.COMPLETE,
-                        session.challenges_completed, True,
-                        CHALLENGE_INSTRUCTIONS[ChallengeType.COMPLETE],
-                        metrics, liveness_token=token,
-                    )
-                else:
-                    await _send_response(
-                        websocket, session_id, current_challenge,
-                        session.challenge_index, False,
-                        "Pulse signal is not clear yet. Keep still and hold your face in frame...",
-                        metrics,
-                    )
-                continue
-
             # After a head-turn, wait for the face to return to neutral first
             if session.waiting_for_neutral:
                 if is_neutral(metrics):
@@ -404,28 +383,6 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                     photo_path = CAPTURES_DIR / f"{session_id}.jpg"
                     photo_path.write_bytes(frame_bytes)
                     session.smile_photo_path = str(photo_path)
-
-                if session.challenge_index == len(CHALLENGE_SEQUENCE) - 1:
-                    if not rppg.ready:
-                        session.awaiting_rppg = True
-                        session.consecutive_count = 0
-                        await _send_response(
-                            websocket, session_id, current_challenge,
-                            session.challenge_index, False,
-                            "Hold still while we verify your live pulse...",
-                            metrics,
-                        )
-                        continue
-                    if metrics.rppg_is_live is not True:
-                        session.awaiting_rppg = True
-                        session.consecutive_count = 0
-                        await _send_response(
-                            websocket, session_id, current_challenge,
-                            session.challenge_index, False,
-                            "Pulse signal is not clear yet. Keep still and hold your face in frame...",
-                            metrics,
-                        )
-                        continue
 
                 session.advance_challenge()
 
