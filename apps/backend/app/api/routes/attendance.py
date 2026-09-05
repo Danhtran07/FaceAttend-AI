@@ -1,12 +1,18 @@
 import calendar
+import asyncio
+import json
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+import websockets
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, status
+from fastapi.websockets import WebSocketDisconnect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import decode_access_token
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
 from app.models.face_data import FaceData
@@ -252,6 +258,73 @@ def recognize_attendance(
             liveness=recognition.liveness,
         ),
     )
+
+
+@router.post("/liveness/session")
+def create_liveness_session(
+    ai_client: AIRecognitionClient = Depends(_get_ai_client),
+    current_user: User = Depends(get_current_user),
+):
+    del current_user
+    try:
+        return ai_client.create_liveness_session()
+    except AIServiceTimeoutError as exc:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
+    except AIServiceUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except AIServiceResponseError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@router.websocket("/liveness/{session_id}")
+async def liveness_proxy(websocket: WebSocket, session_id: str):
+    access_token = websocket.query_params.get("access_token")
+    if not access_token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+    try:
+        token_payload = decode_access_token(access_token)
+        if token_payload.get("sub") is None:
+            raise ValueError("Missing token subject")
+    except ValueError:
+        await websocket.close(code=1008, reason="Invalid authentication")
+        return
+
+    await websocket.accept()
+    ai_ws_url = f"{settings.AI_SERVICE_WS_URL.rstrip('/')}/ws/liveness/{session_id}"
+
+    try:
+        async with websockets.connect(ai_ws_url, open_timeout=settings.AI_SERVICE_TIMEOUT_SECONDS) as ai_socket:
+            async def forward_to_ai():
+                while True:
+                    message = await websocket.receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    if message.get("bytes"):
+                        await ai_socket.send(message["bytes"])
+                    elif message.get("text"):
+                        await ai_socket.send(message["text"])
+
+            async def forward_to_frontend():
+                async for message in ai_socket:
+                    if isinstance(message, bytes):
+                        await websocket.send_bytes(message)
+                    else:
+                        await websocket.send_text(message)
+
+            await asyncio.gather(forward_to_ai(), forward_to_frontend())
+    except (WebSocketDisconnect, websockets.exceptions.ConnectionClosed):
+        pass
+    except Exception as exc:
+        try:
+            await websocket.send_text(json.dumps({"error": "Liveness service unavailable", "detail": str(exc)}))
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @router.get(

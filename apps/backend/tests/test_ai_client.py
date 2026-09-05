@@ -83,3 +83,18 @@ def test_invalid_ai_response_is_reported():
 
     with pytest.raises(AIServiceResponseError):
         client.recognize(b"image", [])
+
+
+def test_legacy_ai_error_response_is_normalized():
+    client = make_client(
+        lambda request: httpx.Response(
+            200,
+            json={"success": False, "error_code": "NO_FACE", "message": "No face detected"},
+        )
+    )
+
+    result = client.recognize(b"image", [])
+
+    assert result.matched is False
+    assert result.liveness is False
+    assert result.error_code == "NO_FACE"

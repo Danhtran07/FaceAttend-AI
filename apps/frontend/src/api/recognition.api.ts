@@ -1,5 +1,15 @@
 import apiClient from "./client";
-import type { RecognitionAttendanceResponse } from "../types/recognition";
+import type {
+  LivenessSessionResponse,
+  RecognitionAttendanceResponse,
+} from "../types/recognition";
+
+export async function createLivenessSession(): Promise<LivenessSessionResponse> {
+  const response = await apiClient.post<LivenessSessionResponse>(
+    "/api/attendance/liveness/session"
+  );
+  return response.data;
+}
 
 export async function recognizeAttendance(
   image: Blob,

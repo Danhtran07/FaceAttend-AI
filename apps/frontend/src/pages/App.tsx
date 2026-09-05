@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import ErrorState from "../components/ErrorState";
 import LoadingState from "../components/LoadingState";
 import { getApiErrorMessage } from "../api/error";
-import { recognizeAttendance } from "../api/recognition.api";
+import {
+  createLivenessSession,
+  recognizeAttendance,
+} from "../api/recognition.api";
 import type { RecognitionAttendanceResponse } from "../types/recognition";
 
 type CheckInState =
@@ -35,11 +38,26 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const frameTimerRef = useRef<number | null>(null);
   const [state, setState] = useState<CheckInState>("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<RecognitionAttendanceResponse | null>(null);
+  const [challenge, setChallenge] = useState("");
+  const [feedback, setFeedback] = useState("Preparing liveness verification...");
+  const [livenessComplete, setLivenessComplete] = useState(false);
+
+  const stopLiveness = () => {
+    if (frameTimerRef.current !== null) {
+      window.clearInterval(frameTimerRef.current);
+      frameTimerRef.current = null;
+    }
+    socketRef.current?.close();
+    socketRef.current = null;
+  };
 
   const stopCamera = () => {
+    stopLiveness();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -51,6 +69,9 @@ export default function App() {
     stopCamera();
     setError("");
     setResult(null);
+    setChallenge("");
+    setFeedback("Preparing liveness verification...");
+    setLivenessComplete(false);
     setState("idle");
   };
 
@@ -78,6 +99,65 @@ export default function App() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       setState("camera");
+
+      const session = await createLivenessSession();
+      sessionStorage.setItem(LIVENESS_SESSION_KEY, session.session_id);
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const token = localStorage.getItem("access_token");
+      const socket = new WebSocket(
+        `${protocol}//${window.location.host}/api/attendance/liveness/${session.session_id}?access_token=${encodeURIComponent(token || "")}`
+      );
+      socket.binaryType = "arraybuffer";
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        setFeedback("Keep your face inside the frame...");
+        frameTimerRef.current = window.setInterval(() => {
+          const currentVideo = videoRef.current;
+          const canvas = canvasRef.current;
+          if (!currentVideo || !canvas || socket.readyState !== WebSocket.OPEN) return;
+          if (currentVideo.videoWidth === 0 || currentVideo.videoHeight === 0) return;
+          canvas.width = currentVideo.videoWidth;
+          canvas.height = currentVideo.videoHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          context.drawImage(currentVideo, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (blob && socket.readyState === WebSocket.OPEN) socket.send(blob);
+          }, "image/jpeg", 0.75);
+        }, 1000 / 12);
+      };
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data) as {
+          challenge?: string;
+          challenge_index?: number;
+          feedback?: string;
+          liveness_token?: string;
+          error?: string;
+        };
+        if (message.error) {
+          setError(message.error);
+          stopCamera();
+          setState("failure");
+          return;
+        }
+        setChallenge(message.challenge || "");
+        setFeedback(message.feedback || "Keep your face inside the frame...");
+        if (message.challenge === "COMPLETE") {
+          setLivenessComplete(true);
+          setFeedback("Liveness verified. Capture your face to continue.");
+          stopLiveness();
+        } else if (message.challenge === "FAILED") {
+          setError(message.feedback || "Liveness verification failed.");
+          stopCamera();
+          setState("failure");
+        }
+      };
+      socket.onerror = () => {
+        setError("Unable to connect to Backend liveness verification.");
+        stopCamera();
+        setState("failure");
+      };
     } catch (reason) {
       stopCamera();
       setError(
@@ -258,29 +338,36 @@ export default function App() {
           </p>
         </div>
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+          <div className={state === "camera" ? "relative aspect-video overflow-hidden rounded-xl bg-slate-950" : "hidden"}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full scale-x-[-1] object-cover"
+            />
+            <div className="pointer-events-none absolute inset-[12%_35%] rounded-[50%] border-2 border-blue-300 shadow-[0_0_0_999px_rgba(15,23,42,0.3)]" />
+            <p className="absolute bottom-4 left-4 rounded-md bg-slate-950/75 px-3 py-2 text-xs font-medium text-white">
+              Position your face inside the frame
+            </p>
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
           {state === "camera" ? (
             <>
-              <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="h-full w-full scale-x-[-1] object-cover"
-                />
-                <div className="pointer-events-none absolute inset-[12%_35%] rounded-[50%] border-2 border-blue-300 shadow-[0_0_0_999px_rgba(15,23,42,0.3)]" />
-                <p className="absolute bottom-4 left-4 rounded-md bg-slate-950/75 px-3 py-2 text-xs font-medium text-white">
-                  Position your face inside the frame
-                </p>
-              </div>
-              <canvas ref={canvasRef} className="hidden" />
               <button
                 type="button"
                 onClick={capture}
-                className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                disabled={!livenessComplete}
+                className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                Capture
+                {livenessComplete ? "Capture" : "Complete liveness verification first"}
               </button>
+              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                  {challenge === "COMPLETE" ? "Verification complete" : challenge.replaceAll("_", " ") || "Liveness check"}
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">{feedback}</p>
+              </div>
             </>
           ) : (
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">

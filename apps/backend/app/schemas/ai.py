@@ -13,3 +13,9 @@ class AIRecognitionResult(BaseModel):
 class AIRecognitionCandidate(BaseModel):
     employee_id: int
     embedding: list[float]
+
+
+class LivenessSessionResponse(BaseModel):
+    session_id: str
+    expires_at: str
+    challenges: list[str]

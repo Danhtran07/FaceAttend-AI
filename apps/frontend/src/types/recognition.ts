@@ -17,3 +17,9 @@ export interface RecognitionAttendanceResponse {
   attendance: Attendance;
   recognition: RecognitionSummary;
 }
+
+export interface LivenessSessionResponse {
+  session_id: string;
+  expires_at: string;
+  challenges: string[];
+}

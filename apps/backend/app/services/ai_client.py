@@ -4,7 +4,11 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.schemas.ai import AIRecognitionCandidate, AIRecognitionResult
+from app.schemas.ai import (
+    AIRecognitionCandidate,
+    AIRecognitionResult,
+    LivenessSessionResponse,
+)
 
 
 class AIServiceUnavailableError(Exception):
@@ -63,10 +67,31 @@ class AIRecognitionClient:
         if not isinstance(response_data, dict):
             raise AIServiceResponseError("AI Service returned an invalid response")
 
+        error_code = response_data.get("error_code")
+        if error_code in {"NO_FACE", "MULTIPLE_FACES", "FACE_NOT_RECOGNIZED", "LIVENESS_FAILED"}:
+            response_data = {
+                **response_data,
+                "matched": False,
+                "liveness": response_data.get("liveness", False),
+            }
+
         try:
             return AIRecognitionResult.model_validate(response_data)
         except (TypeError, ValueError) as exc:
             raise AIServiceResponseError("AI Service returned an invalid recognition result") from exc
+
+    def create_liveness_session(self) -> LivenessSessionResponse:
+        try:
+            response = self._client.post(f"{self._endpoint.rsplit('/face/', 1)[0]}/session/create")
+        except httpx.TimeoutException as exc:
+            raise AIServiceTimeoutError("AI Service request timed out") from exc
+        except httpx.RequestError as exc:
+            raise AIServiceUnavailableError("AI Service is unavailable") from exc
+
+        try:
+            return LivenessSessionResponse.model_validate(response.json())
+        except (TypeError, ValueError) as exc:
+            raise AIServiceResponseError("AI Service returned an invalid liveness session") from exc
 
     def __enter__(self) -> "AIRecognitionClient":
         return self
