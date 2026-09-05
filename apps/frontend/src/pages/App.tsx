@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  DrawingUtils,
+  FaceLandmarker,
+  FilesetResolver,
+  type FaceLandmarkerResult,
+} from "@mediapipe/tasks-vision";
 
 import ErrorState from "../components/ErrorState";
 import LoadingState from "../components/LoadingState";
@@ -18,6 +24,8 @@ type CheckInState =
   | "failure";
 
 const LIVENESS_SESSION_KEY = "liveness_session_id";
+const FACE_LANDMARKER_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 function formatTime(value: string | null) {
   if (!value) return "-";
@@ -37,9 +45,12 @@ function statusClass(status: string) {
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const meshCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const frameTimerRef = useRef<number | null>(null);
+  const meshAnimationRef = useRef<number | null>(null);
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
   const [state, setState] = useState<CheckInState>("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<RecognitionAttendanceResponse | null>(null);
@@ -56,11 +67,84 @@ export default function App() {
     socketRef.current = null;
   };
 
+  const stopFaceMesh = () => {
+    if (meshAnimationRef.current !== null) {
+      window.cancelAnimationFrame(meshAnimationRef.current);
+      meshAnimationRef.current = null;
+    }
+    faceLandmarkerRef.current?.close();
+    faceLandmarkerRef.current = null;
+    const canvas = meshCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
   const stopCamera = () => {
     stopLiveness();
+    stopFaceMesh();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+  };
+
+  const startFaceMesh = async () => {
+    const video = videoRef.current;
+    const canvas = meshCanvasRef.current;
+    if (!video || !canvas) return;
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+    const landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: FACE_LANDMARKER_MODEL,
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+    });
+    faceLandmarkerRef.current = landmarker;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const drawingUtils = new DrawingUtils(context);
+
+    const drawMesh = () => {
+      if (!video || !canvas || !faceLandmarkerRef.current) return;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        const result: FaceLandmarkerResult = landmarker.detectForVideo(
+          video,
+          performance.now()
+        );
+        for (const landmarks of result.faceLandmarks) {
+          drawingUtils.drawConnectors(
+            landmarks,
+            FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+            { color: "rgba(125, 211, 252, 0.72)", lineWidth: 1 }
+          );
+          drawingUtils.drawLandmarks(landmarks, {
+            color: "rgba(255, 255, 255, 0.85)",
+            radius: 1,
+          });
+          context.fillStyle = "#67e8f9";
+          for (const landmark of landmarks) {
+            context.beginPath();
+            context.arc(
+              landmark.x * canvas.width,
+              landmark.y * canvas.height,
+              2,
+              0,
+              Math.PI * 2
+            );
+            context.fill();
+          }
+        }
+      }
+      meshAnimationRef.current = window.requestAnimationFrame(drawMesh);
+    };
+
+    drawMesh();
   };
 
   useEffect(() => stopCamera, []);
@@ -99,6 +183,9 @@ export default function App() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       setState("camera");
+      window.requestAnimationFrame(() => {
+        void startFaceMesh().catch(() => undefined);
+      });
 
       const session = await createLivenessSession();
       sessionStorage.setItem(LIVENESS_SESSION_KEY, session.session_id);
@@ -344,7 +431,11 @@ export default function App() {
               autoPlay
               playsInline
               muted
-              className="h-full w-full scale-x-[-1] object-cover"
+              className="relative z-0 h-full w-full scale-x-[-1] object-cover"
+            />
+            <canvas
+              ref={meshCanvasRef}
+              className="pointer-events-none absolute inset-0 z-10 h-full w-full scale-x-[-1]"
             />
             <div className="pointer-events-none absolute inset-[12%_35%] rounded-[50%] border-2 border-blue-300 shadow-[0_0_0_999px_rgba(15,23,42,0.3)]" />
             <p className="absolute bottom-4 left-4 rounded-md bg-slate-950/75 px-3 py-2 text-xs font-medium text-white">
