@@ -138,6 +138,54 @@ def test_get_attendance_returns_list(db_session, auth_headers, employee):
     assert data[0]["status"] == "PRESENT"
 
 
+def test_get_attendance_calendar_returns_every_day_of_month(
+    db_session,
+    auth_headers,
+    employee,
+):
+    record = Attendance(
+        employee_id=employee.id,
+        date=date(2026, 9, 2),
+        check_in=datetime(2026, 9, 2, 8, 15, 0),
+        status=AttendanceStatus.PRESENT,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    response = client.get(
+        "/api/attendance/calendar",
+        params={"year": 2026, "month": 9, "employee_id": employee.id},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_days"] == 30
+    assert len(data["days"]) == 30
+    assert data["days"][1]["date"] == "2026-09-02"
+    assert data["days"][1]["status"] == "PRESENT"
+    assert data["days"][1]["has_record"] is True
+    assert data["days"][0]["status"] == "ABSENT"
+    assert data["days"][0]["has_record"] is False
+
+
+def test_employee_can_only_view_own_attendance_calendar(
+    db_session,
+    employee_user_headers,
+    employee,
+):
+    headers, _, own_employee = employee_user_headers
+
+    response = client.get(
+        "/api/attendance/calendar",
+        params={"year": 2026, "month": 9, "employee_id": employee.id},
+        headers=headers,
+    )
+
+    assert own_employee.id != employee.id
+    assert response.status_code == 403
+
+
 def test_create_attendance_success(db_session, auth_headers, employee):
     payload = {
         "employee_id": employee.id,

@@ -1,6 +1,7 @@
-from datetime import time
+import calendar
+from datetime import date, time
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,8 @@ from app.models.employee import Employee
 from app.models.user import User, UserRole
 from app.schemas.attendance import (
     AttendanceCreate,
+    AttendanceCalendarResponse,
+    AttendanceCalendarDay,
     AttendanceResponse,
     AttendanceUpdate,
 )
@@ -40,6 +43,97 @@ def _get_employee_for_current_user(db: Session, current_user: User):
         db.query(Employee)
         .filter(Employee.user_id == current_user.id)
         .first()
+    )
+
+
+def _get_calendar_employee(
+    db: Session,
+    current_user: User,
+    employee_id: int | None,
+) -> Employee:
+    if current_user.role == UserRole.EMPLOYEE:
+        employee = _get_employee_for_current_user(db, current_user)
+        if employee is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee profile not found",
+            )
+        if employee_id is not None and employee_id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own attendance calendar",
+            )
+        return employee
+
+    if employee_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="employee_id is required for admin users",
+        )
+
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == employee_id)
+        .first()
+    )
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+    return employee
+
+
+@router.get(
+    "/calendar",
+    response_model=AttendanceCalendarResponse,
+)
+def get_attendance_calendar(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    employee_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    employee = _get_calendar_employee(db, current_user, employee_id)
+    total_days = calendar.monthrange(year, month)[1]
+    first_day = date(year, month, 1)
+    last_day = date(year, month, total_days)
+
+    records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.employee_id == employee.id,
+            Attendance.date >= first_day,
+            Attendance.date <= last_day,
+        )
+        .all()
+    )
+    records_by_date = {record.date: record for record in records}
+
+    days = []
+    for day_number in range(1, total_days + 1):
+        current_date = date(year, month, day_number)
+        record = records_by_date.get(current_date)
+        days.append(
+            AttendanceCalendarDay(
+                date=current_date,
+                day_of_week=current_date.isoweekday(),
+                is_weekend=current_date.weekday() >= 5,
+                attendance_id=record.id if record else None,
+                status=record.status if record else AttendanceStatus.ABSENT,
+                has_record=record is not None,
+                check_in=record.check_in if record else None,
+                check_out=record.check_out if record else None,
+            )
+        )
+
+    return AttendanceCalendarResponse(
+        employee_id=employee.id,
+        year=year,
+        month=month,
+        total_days=total_days,
+        days=days,
     )
 
 

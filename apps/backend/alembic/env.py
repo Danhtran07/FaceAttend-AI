@@ -18,6 +18,7 @@ from app.models import (
     Employee,
     FaceData,
     User,
+    UserProfile,
 )
 
 
