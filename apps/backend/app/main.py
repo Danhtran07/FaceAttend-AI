@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.attendance import router as attendance_router
 from app.api.routes.auth import router as auth_router
@@ -10,6 +13,9 @@ from app.api.routes.users import router as users_router
 
 app = FastAPI(title="FaceAttend Backend")
 
+UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.include_router(health_router)
 app.include_router(auth_router)
