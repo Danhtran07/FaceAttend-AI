@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Any
 from enum import Enum
 
@@ -157,8 +157,21 @@ class LegacyRecognizeCandidate(BaseModel):
 
 class LegacyRecognizeRequest(BaseModel):
     image: str
-    candidates: list[LegacyRecognizeCandidate] = []
+    candidates: list[LegacyRecognizeCandidate] = Field(default_factory=list)
     threshold: float = 0.5
+    liveness_session_id: Optional[str] = None
+
+
+class BackendRecognitionResponse(BaseModel):
+    matched: bool
+    employee_id: Optional[int] = None
+    confidence: float = 0.0
+    liveness: bool
+    # Kept for compatibility with the existing FaceAttend client contract.
+    success: bool = True
+    recognized: Optional[bool] = None
+    error_code: Optional[str] = None
+    message: Optional[str] = None
 
 
 class EmotionScores(BaseModel):

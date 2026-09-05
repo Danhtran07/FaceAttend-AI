@@ -41,7 +41,7 @@ from models import (
     VerifyFaceRequest, VerifyFaceResponse,
     SearchFaceRequest, SearchFaceResponse, SearchMatch, FaceRecordResponse,
     AnalyzeRequest, AnalyzeResponse, EmotionScores,
-    LegacyEnrollRequest, LegacyRecognizeRequest,
+    LegacyEnrollRequest, LegacyRecognizeRequest, BackendRecognitionResponse,
 )
 from challenge_evaluator import is_neutral, evaluate_challenge
 from liveness_engine import LivenessEngine
@@ -565,17 +565,68 @@ def legacy_enroll(body: LegacyEnrollRequest):
     }
 
 
-@app.post("/face/recognize")
-def legacy_recognize(body: LegacyRecognizeRequest):
-    """Compatibility route using caller-provided ArcFace gallery vectors."""
-    try:
-        img_bytes = base64.b64decode(body.image)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid base64 image")
+def _decode_image_payload(image: str) -> bytes:
+    encoded = image.split(",", 1)[-1] if "," in image else image
+    return base64.b64decode(encoded, validate=True)
 
-    result = rec_engine.analyze(img_bytes)
+
+def _recognition_error(status_code: int, error_code: str, message: str, liveness: bool = False):
+    return JSONResponse(
+        status_code=status_code,
+        content=BackendRecognitionResponse(
+            matched=False,
+            confidence=0.0,
+            liveness=liveness,
+            success=False,
+            recognized=False,
+            error_code=error_code,
+            message=message,
+        ).model_dump(),
+    )
+
+
+def _has_completed_liveness(session_id: str | None) -> bool:
+    if not session_id:
+        return False
+    session = session_manager.get_session(session_id)
+    return bool(
+        session
+        and session.state == SessionState.COMPLETE
+        and session.liveness_token
+    )
+
+
+@app.post("/face/recognize", response_model=BackendRecognitionResponse)
+def legacy_recognize(body: LegacyRecognizeRequest):
+    """Recognize one face against Backend-provided employee embeddings.
+
+    The Backend owns employee identity data and supplies the candidate gallery.
+    A completed liveness session is required, but its JWT is never parsed here.
+    """
+    if not _has_completed_liveness(body.liveness_session_id):
+        return _recognition_error(
+            422,
+            "LIVENESS_FAILED",
+            "A completed liveness session is required",
+        )
+
+    try:
+        img_bytes = _decode_image_payload(body.image)
+    except Exception:
+        return _recognition_error(400, "INVALID_IMAGE", "Invalid base64 image")
+
+    try:
+        result = rec_engine.analyze(img_bytes)
+    except Exception:
+        logger.exception("Face recognition inference failed")
+        return _recognition_error(500, "INFERENCE_ERROR", "Face recognition inference failed", True)
+
+    if not result.image_valid:
+        return _recognition_error(400, "INVALID_IMAGE", "Image data could not be decoded", True)
     if not result.face_detected or result.embedding is None:
-        return {"success": False, "error_code": "NO_FACE", "message": "No face detected"}
+        return _recognition_error(422, "NO_FACE", "No face detected", True)
+    if result.face_count > 1:
+        return _recognition_error(422, "MULTIPLE_FACES", "Multiple faces detected", True)
 
     query = np.asarray(result.embedding, dtype=np.float32)
     best_id = None
@@ -593,19 +644,23 @@ def legacy_recognize(body: LegacyRecognizeRequest):
             best_similarity = similarity
 
     if best_id is not None and best_similarity >= body.threshold:
-        return {
-            "success": True,
-            "recognized": True,
-            "employee_id": best_id,
-            "confidence": round(best_similarity, 4),
-        }
-    return {
-        "success": False,
-        "recognized": False,
-        "error_code": "UNKNOWN_FACE",
-        "message": "No matching employee",
-        "confidence": round(max(best_similarity, 0.0), 4),
-    }
+        return BackendRecognitionResponse(
+            matched=True,
+            employee_id=best_id,
+            confidence=round(best_similarity, 4),
+            liveness=True,
+            success=True,
+            recognized=True,
+        )
+    return BackendRecognitionResponse(
+        matched=False,
+        confidence=round(max(best_similarity, 0.0), 4),
+        liveness=True,
+        success=False,
+        recognized=False,
+        error_code="FACE_NOT_RECOGNIZED",
+        message="No matching employee",
+    )
 
 @app.post("/face/analyze", response_model=AnalyzeResponse)
 def analyze_face(body: AnalyzeRequest):

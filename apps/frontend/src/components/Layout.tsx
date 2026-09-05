@@ -260,6 +260,45 @@ const isUsersActive =
           </Link>
 
 
+          {/* Face Attendance */}
+
+          <Link
+            to="/recognition"
+            onClick={closeMobileMenu}
+            className="
+              mb-1
+              flex items-center
+              gap-3
+              rounded-xl
+              px-3.5 py-3
+              text-sm font-semibold
+              no-underline
+              transition
+              text-slate-600
+              hover:bg-blue-50
+              hover:text-blue-600
+            "
+          >
+            <span
+              className="
+                flex h-9 w-9
+                items-center justify-center
+                rounded-lg
+                bg-blue-50
+                text-lg
+                text-blue-600
+              "
+            >
+              ◉
+            </span>
+
+            <span>
+              Face Attendance
+            </span>
+
+          </Link>
+
+
           {/* Employees */}
 
           <Link
