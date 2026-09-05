@@ -321,9 +321,10 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
             current_challenge = session.current_challenge
 
             if session.consecutive_count % 15 == 0:
-                logger.debug("challenge=%s yaw=%.3f smile=%.3f consec=%d",
+                logger.debug("challenge=%s yaw=%.3f blink=%.3f smile=%.3f consec=%d",
                              current_challenge.value, metrics.yaw_proxy,
-                             metrics.smile_score, session.consecutive_count)
+                             metrics.blink_score, metrics.smile_score,
+                             session.consecutive_count)
 
             # No face — don't terminate, just guide the user back into frame
             if not metrics.face_detected:
@@ -345,6 +346,27 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                                      "Spoof attempt detected. Session terminated.",
                                      metrics)
                 break
+
+            if session.awaiting_rppg:
+                if rppg.ready and metrics.rppg_is_live is True:
+                    session.awaiting_rppg = False
+                    session.state = SessionState.COMPLETE
+                    token = _issue_liveness_token(session_id)
+                    session.liveness_token = token
+                    await _send_response(
+                        websocket, session_id, ChallengeType.COMPLETE,
+                        session.challenges_completed, True,
+                        CHALLENGE_INSTRUCTIONS[ChallengeType.COMPLETE],
+                        metrics, liveness_token=token,
+                    )
+                else:
+                    await _send_response(
+                        websocket, session_id, current_challenge,
+                        session.challenge_index, False,
+                        "Hold still while we verify your live pulse...",
+                        metrics,
+                    )
+                continue
 
             # After a head-turn, wait for the face to return to neutral first
             if session.waiting_for_neutral:
@@ -369,14 +391,33 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                     photo_path.write_bytes(frame_bytes)
                     session.smile_photo_path = str(photo_path)
 
+                if session.challenge_index == len(CHALLENGE_SEQUENCE) - 1:
+                    if not rppg.ready:
+                        session.awaiting_rppg = True
+                        session.consecutive_count = 0
+                        await _send_response(
+                            websocket, session_id, current_challenge,
+                            session.challenge_index, False,
+                            "Hold still while we verify your live pulse...",
+                            metrics,
+                        )
+                        continue
+                    if metrics.rppg_is_live is not True:
+                        session.state = SessionState.FAILED
+                        await _send_response(
+                            websocket, session_id, ChallengeType.FAILED,
+                            session.challenges_completed, False,
+                            "A live pulse could not be verified. Please try again.",
+                            metrics,
+                        )
+                        break
+
                 session.advance_challenge()
 
                 if session.challenge_index >= len(CHALLENGE_SEQUENCE):
-                    # All challenges complete — issue liveness token
                     session.state = SessionState.COMPLETE
                     token = _issue_liveness_token(session_id)
                     session.liveness_token = token
-
                     await _send_response(
                         websocket, session_id, ChallengeType.COMPLETE,
                         session.challenges_completed, True,

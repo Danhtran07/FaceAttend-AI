@@ -8,6 +8,7 @@ from enum import Enum
 class ChallengeType(str, Enum):
     TURN_LEFT  = "TURN_LEFT"
     TURN_RIGHT = "TURN_RIGHT"
+    BLINK      = "BLINK"
     SMILE      = "SMILE"
     COMPLETE   = "COMPLETE"
     FAILED     = "FAILED"
@@ -21,11 +22,16 @@ class SessionState(str, Enum):
     EXPIRED    = "EXPIRED"
 
 
-CHALLENGE_SEQUENCE = [ChallengeType.TURN_LEFT, ChallengeType.TURN_RIGHT]
+CHALLENGE_SEQUENCE = [
+    ChallengeType.TURN_LEFT,
+    ChallengeType.TURN_RIGHT,
+    ChallengeType.BLINK,
+]
 
 CHALLENGE_INSTRUCTIONS = {
     ChallengeType.TURN_LEFT:  "Slowly turn your head to the LEFT",
     ChallengeType.TURN_RIGHT: "Now turn your head to the RIGHT",
+    ChallengeType.BLINK:      "Please blink slowly",
     ChallengeType.SMILE:      "Great! Now give us a big SMILE",
     ChallengeType.COMPLETE:   "Verification complete!",
     ChallengeType.FAILED:     "Verification failed. Please try again.",
@@ -35,6 +41,7 @@ CHALLENGE_INSTRUCTIONS = {
 class FaceMetrics(BaseModel):
     face_detected: bool
     yaw_proxy: float = 0.0
+    blink_score: float = 0.0
     smile_score: float = 0.0
     texture_variance: float = 0.0
     landmark_z_std: float = 0.0

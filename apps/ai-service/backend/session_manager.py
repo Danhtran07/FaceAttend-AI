@@ -19,6 +19,7 @@ class Session:
         self.liveness_token: str | None = None
         self.smile_photo_path: str | None = None
         self.waiting_for_neutral: bool = False  # must return to forward-facing before next challenge
+        self.awaiting_rppg: bool = False
         self.spoof_consecutive_count = 0
         self.created_at = time.monotonic()
         self.frame_hashes: list[str] = []

@@ -29,6 +29,7 @@ NEUTRAL_THRESHOLD    =  0.15   # within ±0.15 counts as "facing forward"
 
 # Smile blendshape threshold (0–1 score from MediaPipe)
 SMILE_SCORE_THRESHOLD = 0.5
+BLINK_SCORE_THRESHOLD = 0.55
 
 SPOOF_TEXTURE_MIN = 50.0
 SPOOF_Z_STD_MIN   = 0.008
@@ -73,6 +74,7 @@ class LivenessEngine:
         h, w = frame.shape[:2]
 
         yaw_proxy   = self._compute_yaw_proxy(landmarks)
+        blink_score = self._compute_blink_score(result)
         smile_score = self._compute_smile_score(result)
         texture_var, z_std, is_spoof = self._check_spoof(frame, landmarks, w, h)
         forehead    = self.extract_forehead_rgb(frame, landmarks, w, h)
@@ -81,6 +83,7 @@ class LivenessEngine:
         metrics = FaceMetrics(
             face_detected=True,
             yaw_proxy=round(yaw_proxy, 4),
+            blink_score=round(blink_score, 4),
             smile_score=round(smile_score, 4),
             texture_variance=round(texture_var, 2),
             landmark_z_std=round(z_std, 6),
@@ -128,6 +131,13 @@ class LivenessEngine:
         bs = self.extract_blendshapes(result)
         left  = bs.get("mouthSmileLeft",  0.0)
         right = bs.get("mouthSmileRight", 0.0)
+        return float((left + right) / 2)
+
+    def _compute_blink_score(self, result) -> float:
+        """Average eye closure score from MediaPipe blendshapes."""
+        bs = self.extract_blendshapes(result)
+        left = bs.get("eyeBlinkLeft", 0.0)
+        right = bs.get("eyeBlinkRight", 0.0)
         return float((left + right) / 2)
 
     def _spoof_decision(self, texture_var: float, z_std: float, face_width: int, face_height: int) -> bool:
