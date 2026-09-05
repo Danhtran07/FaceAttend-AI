@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-const API_BASE = import.meta.env.VITE_AI_URL || "http://localhost:8001";
+const API_BASE = import.meta.env.VITE_AI_URL || "http://localhost:8002";
 const CHALLENGES = ["Turn Left", "Turn Right"];
 
 type ServerMessage = {
@@ -115,7 +115,7 @@ export default function App() {
         }
       };
       socket.onerror = () => {
-        setError("WebSocket AI liveness không kết nối. Kiểm tra AI service tại localhost:8001.");
+        setError("WebSocket AI liveness không kết nối. Kiểm tra AI service tại localhost:8002.");
         cleanup();
       };
     } catch (reason) {
@@ -126,9 +126,9 @@ export default function App() {
       if (message.includes("Permission") || message.includes("NotAllowedError") || message.includes("camera")) {
         setError("Trình duyệt chưa được cấp quyền camera. Cho phép truy cập camera và thử lại.");
       } else if (message.includes("session") || message.includes("Session failed") || message.includes("AI session")) {
-        setError("Không tạo được phiên xác minh trên AI service. Kiểm tra http://localhost:8001/health");
-      } else if (message.includes("WebSocket") || message.includes("localhost:8001")) {
-        setError("Không kết nối được AI service qua WebSocket. Kiểm tra port 8001.");
+        setError("Không tạo được phiên xác minh trên AI service. Kiểm tra http://localhost:8002/health");
+      } else if (message.includes("WebSocket") || message.includes("localhost:8002")) {
+        setError("Không kết nối được AI service qua WebSocket. Kiểm tra port 8002.");
       } else {
         setError(`Không thể khởi động camera hoặc AI service. Chi tiết: ${message}`);
       }
