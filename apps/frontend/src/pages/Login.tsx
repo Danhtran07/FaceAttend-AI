@@ -2,7 +2,7 @@ import {
   FormEvent,
   useState,
 } from "react";
-import { Check } from "lucide-react";
+import { Check, LockKeyhole, CircleAlert } from "lucide-react";
 
 import {
   useNavigate,
@@ -111,9 +111,11 @@ export default function Login() {
     <div
       className="
         min-h-screen
+        flex
+        min-h-screen
+        items-center
+        justify-center
         bg-slate-50
-        lg:grid
-        lg:grid-cols-2
       "
     >
 
@@ -123,16 +125,7 @@ export default function Login() {
 
       <section
         className="
-          relative
           hidden
-          overflow-hidden
-          bg-blue-600
-          lg:flex
-          lg:min-h-screen
-          lg:flex-col
-          lg:justify-center
-          lg:px-12
-          xl:px-20
         "
       >
 
@@ -384,7 +377,7 @@ export default function Login() {
               flex
               flex-col
               items-center
-              lg:hidden
+              flex
             "
           >
 
@@ -647,7 +640,7 @@ export default function Login() {
                       text-red-600
                     "
                   >
-                    !
+                    <CircleAlert size={16} strokeWidth={2} />
                   </div>
 
                   <p
@@ -759,7 +752,7 @@ export default function Login() {
             "
           >
             <span>
-              🔒
+              <LockKeyhole size={14} strokeWidth={2} />
             </span>
 
             Secure authentication

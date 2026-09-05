@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ScanFace, UsersRound } from "lucide-react";
+import { Pencil, ScanFace, Search, Trash2, UsersRound } from "lucide-react";
 
 import {
   createEmployee,
@@ -56,6 +56,13 @@ const emptyForm: EmployeeForm = {
 ============================================================ */
 
 export default function Employees() {
+  const isAdmin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}").role === "ADMIN";
+    } catch {
+      return false;
+    }
+  })();
 
   /* ----------------------------------------------------------
      Employees
@@ -634,7 +641,7 @@ export default function Employees() {
         </div>
 
 
-        <button
+        {isAdmin && <button
           type="button"
           onClick={openCreateModal}
           disabled={loading}
@@ -666,7 +673,7 @@ export default function Employees() {
           </span>
 
           Add Employee
-        </button>
+        </button>}
 
       </header>
 
@@ -802,7 +809,7 @@ export default function Employees() {
                 text-slate-400
               "
             >
-              🔍
+              <Search size={17} strokeWidth={2} />
             </span>
 
             <input
@@ -1045,7 +1052,7 @@ export default function Employees() {
                   : "Start by creating your first employee."}
               </p>
 
-              {!search && (
+              {!search && isAdmin && (
 
                 <button
                   type="button"
@@ -1372,7 +1379,7 @@ export default function Employees() {
                           "
                         >
 
-                          <div
+                          {isAdmin && <div
                             className="
                               flex
                               justify-end
@@ -1425,7 +1432,7 @@ export default function Employees() {
                                 disabled:opacity-40
                               "
                             >
-                              ✎
+                              <Pencil size={16} strokeWidth={2} />
                             </button>
 
 
@@ -1477,10 +1484,10 @@ export default function Employees() {
                                     "
                                   />
                                 )
-                                : "🗑"}
+                                : <Trash2 size={16} strokeWidth={2} />}
                             </button>
 
-                          </div>
+                          </div>}
 
                         </td>
 

@@ -5,7 +5,7 @@ from app.api.dependencies.auth import get_current_user
 from app.core.database import get_db
 from app.models.employee import Employee
 from app.models.face_data import FaceData
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeResponse,
@@ -23,6 +23,14 @@ router = APIRouter(
     prefix="/api/employees",
     tags=["Employees"],
 )
+
+
+def _require_admin(current_user: User) -> None:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can manage employees",
+        )
 
 
 @router.get(
@@ -44,7 +52,7 @@ def enroll_employee_face(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    del current_user
+    _require_admin(current_user)
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if employee is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
@@ -120,6 +128,7 @@ def create_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_admin(current_user)
     user = (
         db.query(User)
         .filter(User.id == payload.user_id)
@@ -173,6 +182,7 @@ def update_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_admin(current_user)
     employee = (
         db.query(Employee)
         .filter(Employee.id == employee_id)
@@ -237,6 +247,7 @@ def delete_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_admin(current_user)
     employee = (
         db.query(Employee)
         .filter(Employee.id == employee_id)
