@@ -47,12 +47,10 @@ docker compose up -d --build
 The backend waits for PostgreSQL and runs the Alembic migrations automatically.
 The services are available at:
 
-```
-cd apps/ai-service
-uvicorn app.main:app --reload --port 8001
-```
 - Backend: http://localhost:8000
 - Backend health: http://localhost:8000/health
+- AI service: http://localhost:8002
+- AI service health: http://localhost:8002/health
 
 Run the frontend in a second terminal:
 
@@ -92,10 +90,13 @@ the internal Docker values `POSTGRES_HOST=postgres` or `DATABASE_URL`.
 ## Run Services Without Docker
 
 For manual development, use a local PostgreSQL instance and set `DATABASE_URL`
-accordingly. Then run:
+accordingly. Install backend dependencies first, then run:
 
 ```
-cd backend
+cd apps/backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
@@ -103,10 +104,22 @@ uvicorn app.main:app --reload --port 8000
 In another terminal:
 
 ```
-cd frontend
+cd apps/frontend
 npm install
 npm run dev
 ```
+
+To run the AI service manually, install its dependencies and start it from its
+backend directory:
+
+```bash
+cd apps/ai-service/backend
+pip install -r ../requirements.txt
+uvicorn main:app --reload --port 8001
+```
+
+The Docker setup publishes the AI service on host port `8002` by default. Set
+`AI_SERVICE_HOST_PORT` in `.env` if that port is already in use.
 
 ## Current Status
 
