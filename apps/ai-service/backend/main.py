@@ -42,7 +42,8 @@ from models import (
     SearchFaceRequest, SearchFaceResponse, SearchMatch, FaceRecordResponse,
     AnalyzeRequest, AnalyzeResponse, EmotionScores,
     LegacyEnrollRequest, LegacyRecognizeCandidate, LegacyRecognizeRequest,
-    BackendRecognitionResponse,
+    BackendRecognitionResponse, RecognitionFeedbackRequest,
+    RecognitionMetricsResponse,
 )
 from challenge_evaluator import is_neutral, evaluate_challenge
 from liveness_engine import LivenessEngine
@@ -52,6 +53,7 @@ from face_db import face_db
 from emotion_engine import blendshapes_to_emotions, dominant_emotion
 from rppg_engine import RPPGEngine
 from photo_validator import PhotoValidator
+from recognition_metrics import RecognitionMetrics
 
 # ── JWT config ────────────────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
@@ -94,6 +96,7 @@ app.add_middleware(
 engine          = LivenessEngine()
 rec_engine      = FaceRecognitionEngine()
 photo_validator = PhotoValidator()
+recognition_metrics = RecognitionMetrics()
 
 # Per-session rPPG engines — keyed by session_id, cleaned up on session end
 rppg_engines: dict[str, RPPGEngine] = {}
@@ -108,6 +111,17 @@ rppg_last_pos: dict[str, tuple[float, float]] = {}
 @app.get("/health")
 def health():
     return {"status": "ok", "faces_registered": face_db.index.ntotal}
+
+
+@app.get("/metrics/recognition", response_model=RecognitionMetricsResponse)
+def recognition_metrics_snapshot():
+    return recognition_metrics.snapshot()
+
+
+@app.post("/metrics/recognition/feedback")
+def record_recognition_feedback(body: RecognitionFeedbackRequest):
+    recognition_metrics.record_feedback(false_positive=body.false_positive)
+    return recognition_metrics.snapshot()
 
 
 # ── REST endpoints ────────────────────────────────────────────────────────────
@@ -613,6 +627,7 @@ def _decode_image_payload(image: str) -> bytes:
 
 
 def _recognition_error(status_code: int, error_code: str, message: str, liveness: bool = False):
+    recognition_metrics.record_result(matched=False, error_code=error_code)
     return JSONResponse(
         status_code=status_code,
         content=BackendRecognitionResponse(
@@ -711,7 +726,7 @@ def legacy_recognize(body: LegacyRecognizeRequest):
                 "Multiple employees have similarly matching faces",
                 True,
             )
-        return BackendRecognitionResponse(
+        response = BackendRecognitionResponse(
             matched=True,
             employee_id=best_id,
             confidence=round(best_similarity, 4),
@@ -719,6 +734,16 @@ def legacy_recognize(body: LegacyRecognizeRequest):
             success=True,
             recognized=True,
         )
+        recognition_metrics.record_result(
+            matched=True,
+            confidence=response.confidence,
+        )
+        return response
+    recognition_metrics.record_result(
+        matched=False,
+        confidence=max(best_similarity, 0.0),
+        error_code="FACE_NOT_RECOGNIZED",
+    )
     return BackendRecognitionResponse(
         matched=False,
         confidence=round(max(best_similarity, 0.0), 4),

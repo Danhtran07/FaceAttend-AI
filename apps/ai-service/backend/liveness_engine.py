@@ -33,6 +33,7 @@ BLINK_SCORE_THRESHOLD = 0.55
 
 SPOOF_TEXTURE_MIN = 50.0
 SPOOF_Z_STD_MIN   = 0.008
+LOW_LIGHT_MEAN    = 25.0
 
 MODEL_PATH = Path(__file__).parent / "face_landmarker.task"
 
@@ -76,6 +77,7 @@ class LivenessEngine:
         yaw_proxy   = self._compute_yaw_proxy(landmarks)
         blink_score = self._compute_blink_score(result)
         smile_score = self._compute_smile_score(result)
+        lighting_mean = self._compute_lighting_mean(frame, landmarks, w, h)
         texture_var, z_std, is_spoof = self._check_spoof(frame, landmarks, w, h)
         forehead    = self.extract_forehead_rgb(frame, landmarks, w, h)
 
@@ -85,6 +87,8 @@ class LivenessEngine:
             yaw_proxy=round(yaw_proxy, 4),
             blink_score=round(blink_score, 4),
             smile_score=round(smile_score, 4),
+            lighting_mean=round(lighting_mean, 2),
+            is_low_light=lighting_mean < LOW_LIGHT_MEAN,
             texture_variance=round(texture_var, 2),
             landmark_z_std=round(z_std, 6),
             is_spoof=is_spoof,
@@ -139,6 +143,18 @@ class LivenessEngine:
         left = bs.get("eyeBlinkLeft", 0.0)
         right = bs.get("eyeBlinkRight", 0.0)
         return float((left + right) / 2)
+
+    def _compute_lighting_mean(self, frame, landmarks, w: int, h: int) -> float:
+        xs = [lm.x for lm in landmarks]
+        ys = [lm.y for lm in landmarks]
+        x1 = max(0, int(min(xs) * w))
+        y1 = max(0, int(min(ys) * h))
+        x2 = min(w, int(max(xs) * w))
+        y2 = min(h, int(max(ys) * h))
+        face_crop = frame[y1:y2, x1:x2]
+        if face_crop.size == 0:
+            return 0.0
+        return float(cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY).mean())
 
     def _spoof_decision(self, texture_var: float, z_std: float, face_width: int, face_height: int) -> bool:
         """Reject spoof only when the face crop is large enough and the texture/depth signal is clearly implausible."""

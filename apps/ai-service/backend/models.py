@@ -43,6 +43,8 @@ class FaceMetrics(BaseModel):
     yaw_proxy: float = 0.0
     blink_score: float = 0.0
     smile_score: float = 0.0
+    lighting_mean: float = 0.0
+    is_low_light: bool = False
     texture_variance: float = 0.0
     landmark_z_std: float = 0.0
     is_spoof: bool = False
@@ -180,6 +182,22 @@ class BackendRecognitionResponse(BaseModel):
     recognized: Optional[bool] = None
     error_code: Optional[str] = None
     message: Optional[str] = None
+
+
+class RecognitionFeedbackRequest(BaseModel):
+    false_positive: bool
+
+
+class RecognitionMetricsResponse(BaseModel):
+    total_requests: int
+    matched_requests: int
+    failed_requests: int
+    failure_rate: float
+    average_confidence: float
+    failure_reasons: dict[str, int]
+    labeled_results: int
+    false_positive_reports: int
+    false_positive_rate: float
 
 
 class EmotionScores(BaseModel):

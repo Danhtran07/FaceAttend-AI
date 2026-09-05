@@ -17,7 +17,7 @@ def evaluate_challenge(
     Returns (challenge_fully_passed, updated_consecutive_count).
     Resets consecutive count to 0 on any non-passing frame.
     """
-    if not metrics.face_detected or metrics.is_spoof:
+    if not metrics.face_detected or metrics.is_spoof or metrics.is_low_light:
         return False, 0
 
     frame_passes = _frame_passes_challenge(challenge, metrics)

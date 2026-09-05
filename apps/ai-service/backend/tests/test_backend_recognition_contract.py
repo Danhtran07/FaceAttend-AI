@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from face_recognition_engine import FaceAnalysisResult, FaceRecognitionEngine
 from main import _find_best_candidate
 from models import BackendRecognitionResponse, LegacyRecognizeCandidate, LegacyRecognizeRequest
+from recognition_metrics import RecognitionMetrics
 
 
 def test_backend_request_accepts_liveness_session_and_response_contract():
@@ -84,3 +85,23 @@ def test_best_candidate_collapses_multiple_embeddings_per_employee():
 
     assert [employee_id for employee_id, _ in ranked] == [1, 2]
     assert ranked[0][1] > ranked[1][1]
+
+
+def test_recognition_metrics_track_confidence_failures_and_false_positives():
+    metrics = RecognitionMetrics()
+    metrics.record_result(matched=True, confidence=0.91)
+    metrics.record_result(matched=False, confidence=0.22, error_code="FACE_NOT_RECOGNIZED")
+    metrics.record_result(matched=False, error_code="MULTIPLE_FACES")
+    metrics.record_feedback(false_positive=True)
+    metrics.record_feedback(false_positive=False)
+
+    snapshot = metrics.snapshot()
+
+    assert snapshot["total_requests"] == 3
+    assert snapshot["failed_requests"] == 2
+    assert snapshot["failure_reasons"] == {
+        "FACE_NOT_RECOGNIZED": 1,
+        "MULTIPLE_FACES": 1,
+    }
+    assert snapshot["average_confidence"] == 0.565
+    assert snapshot["false_positive_rate"] == 0.5

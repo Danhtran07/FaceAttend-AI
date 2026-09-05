@@ -36,3 +36,12 @@ def test_blink_challenge_does_not_pass_without_blink_signal():
 
     assert passed is False
     assert count == 0
+
+
+def test_low_light_frame_does_not_pass_liveness_challenge():
+    metrics = FaceMetrics(face_detected=True, lighting_mean=18.0, is_low_light=True)
+
+    passed, count = evaluate_challenge(ChallengeType.TURN_LEFT, metrics, 19)
+
+    assert passed is False
+    assert count == 0
