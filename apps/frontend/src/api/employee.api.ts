@@ -5,6 +5,17 @@ import type {
   EmployeeUpdate,
 } from "../types/employee";
 
+export async function enrollEmployeeFace(
+  id: number,
+  image: File
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("image", image);
+  await apiClient.post(`/api/employees/${id}/face`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
 export async function getEmployees(): Promise<Employee[]> {
 
   const response =

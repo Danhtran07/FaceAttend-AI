@@ -19,3 +19,10 @@ class LivenessSessionResponse(BaseModel):
     session_id: str
     expires_at: str
     challenges: list[str]
+
+
+class AIEnrollmentResult(BaseModel):
+    success: bool
+    embedding: list[float] | None = None
+    error_code: str | None = None
+    message: str | None = None

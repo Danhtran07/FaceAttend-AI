@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.schemas.ai import (
     AIRecognitionCandidate,
     AIRecognitionResult,
+    AIEnrollmentResult,
     LivenessSessionResponse,
 )
 
@@ -92,6 +93,24 @@ class AIRecognitionClient:
             return LivenessSessionResponse.model_validate(response.json())
         except (TypeError, ValueError) as exc:
             raise AIServiceResponseError("AI Service returned an invalid liveness session") from exc
+
+    def enroll_face(self, face_image: bytes) -> AIEnrollmentResult:
+        payload = {"image": base64.b64encode(face_image).decode("ascii")}
+        enroll_endpoint = f"{self._endpoint.rsplit('/face/', 1)[0]}/face/enroll"
+        try:
+            response = self._client.post(enroll_endpoint, json=payload)
+        except httpx.TimeoutException as exc:
+            raise AIServiceTimeoutError("AI Service request timed out") from exc
+        except httpx.RequestError as exc:
+            raise AIServiceUnavailableError("AI Service is unavailable") from exc
+
+        try:
+            result = AIEnrollmentResult.model_validate(response.json())
+        except (TypeError, ValueError) as exc:
+            raise AIServiceResponseError("AI Service returned an invalid enrollment result") from exc
+        if not result.success or not result.embedding:
+            raise AIServiceResponseError(result.message or "Face enrollment failed")
+        return result
 
     def __enter__(self) -> "AIRecognitionClient":
         return self

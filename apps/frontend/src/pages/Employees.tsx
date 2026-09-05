@@ -1,12 +1,14 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import {
   createEmployee,
   deleteEmployee,
+  enrollEmployeeFace,
   getEmployees,
   updateEmployee,
 } from "../api/employee.api";
@@ -124,6 +126,11 @@ export default function Employees() {
     deleteError,
     setDeleteError,
   ] = useState("");
+
+  const [faceMessage, setFaceMessage] = useState("");
+  const [faceError, setFaceError] = useState("");
+  const [enrollingId, setEnrollingId] = useState<number | null>(null);
+  const faceInputRef = useRef<HTMLInputElement>(null);
 
 
   /* ==========================================================
@@ -533,6 +540,35 @@ export default function Employees() {
     }
   }
 
+  function startFaceEnrollment(employeeId: number) {
+    setFaceError("");
+    setFaceMessage("");
+    setEnrollingId(employeeId);
+    faceInputRef.current?.click();
+  }
+
+  async function handleFaceFileChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const image = event.target.files?.[0];
+    const employeeId = enrollingId;
+    event.target.value = "";
+
+    if (!image || employeeId === null) {
+      setEnrollingId(null);
+      return;
+    }
+
+    try {
+      await enrollEmployeeFace(employeeId, image);
+      setFaceMessage("Face enrolled successfully. This employee can now use AI check-in.");
+    } catch (error) {
+      setFaceError(getApiErrorMessage(error));
+    } finally {
+      setEnrollingId(null);
+    }
+  }
+
 
   /* ==========================================================
      RENDER
@@ -632,6 +668,26 @@ export default function Employees() {
         </button>
 
       </header>
+
+      <input
+        ref={faceInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFaceFileChange}
+      />
+
+      {(faceMessage || faceError) && (
+        <div
+          className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
+            faceError
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {faceError || faceMessage}
+        </div>
+      )}
 
 
       {/* ======================================================
@@ -1321,6 +1377,18 @@ export default function Employees() {
                               gap-2
                             "
                           >
+
+                            {/* Face enrollment */}
+
+                            <button
+                              type="button"
+                              title="Enroll face"
+                              onClick={() => startFaceEnrollment(employee.id)}
+                              disabled={enrollingId !== null || saving}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {enrollingId === employee.id ? "..." : "◉"}
+                            </button>
 
                             {/* Edit */}
 

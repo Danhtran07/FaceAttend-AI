@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
 from app.core.database import get_db
 from app.models.employee import Employee
+from app.models.face_data import FaceData
 from app.models.user import User
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeResponse,
     EmployeeUpdate,
+)
+from app.services.ai_client import (
+    AIRecognitionClient,
+    AIServiceResponseError,
+    AIServiceTimeoutError,
+    AIServiceUnavailableError,
 )
 
 
@@ -27,6 +34,40 @@ def get_employees(
     current_user: User = Depends(get_current_user),
 ):
     return db.query(Employee).all()
+
+
+@router.post("/{employee_id}/face", status_code=status.HTTP_201_CREATED)
+def enroll_employee_face(
+    employee_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    del current_user
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if employee is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+
+    image_bytes = image.file.read()
+    if not image_bytes or not (image.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A valid image file is required")
+
+    client = AIRecognitionClient()
+    try:
+        result = client.enroll_face(image_bytes)
+    except AIServiceTimeoutError as exc:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
+    except AIServiceUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except AIServiceResponseError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    finally:
+        client.close()
+
+    db.query(FaceData).filter(FaceData.employee_id == employee_id).delete()
+    db.add(FaceData(employee_id=employee_id, embedding=result.embedding, model_name="insightface"))
+    db.commit()
+    return {"success": True, "employee_id": employee_id}
 
 
 @router.get(
