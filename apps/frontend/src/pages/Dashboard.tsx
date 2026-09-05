@@ -3,6 +3,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 
 import { getEmployees } from "../api/employee.api";
 import { getAttendances } from "../api/attendance.api";
@@ -566,24 +567,50 @@ export default function Dashboard() {
         </div>
 
 
-        <div
-          className="
-            inline-flex
-            w-fit
-            items-center
-            rounded-xl
-            border
-            border-slate-200
-            bg-white
-            px-4
-            py-2.5
-            text-sm
-            font-medium
-            text-slate-500
-            shadow-sm
-          "
-        >
-          {displayDate}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/recognition"
+            className="
+              inline-flex
+              items-center
+              gap-2
+              rounded-xl
+              bg-blue-600
+              px-4
+              py-2.5
+              text-sm
+              font-bold
+              text-white
+              no-underline
+              shadow-sm
+              transition
+              hover:bg-blue-700
+              hover:shadow-md
+            "
+          >
+            <span aria-hidden="true">◉</span>
+            Face Attendance
+          </Link>
+
+          <div
+            className="
+              inline-flex
+              w-fit
+              items-center
+              rounded-xl
+              border
+              border-slate-200
+              bg-white
+              px-4
+              py-2.5
+              text-sm
+              font-medium
+              text-slate-500
+              shadow-sm
+            "
+          >
+            {displayDate}
+          </div>
         </div>
 
       </header>
