@@ -22,6 +22,9 @@ def evaluate_challenge(
 
     frame_passes = _frame_passes_challenge(challenge, metrics)
 
+    if challenge == ChallengeType.BLINK:
+        return frame_passes, 1 if frame_passes else 0
+
     new_count = consecutive_count + 1 if frame_passes else 0
     challenge_passed = new_count >= CONSECUTIVE_FRAMES_REQUIRED
     return challenge_passed, new_count

@@ -1,3 +1,4 @@
+from app.core.timezone import to_utc_time, to_vietnam_time
 import calendar
 import asyncio
 import json
@@ -411,7 +412,7 @@ def create_attendance(
         )
 
     if payload.check_out is not None and payload.check_in is not None:
-        if payload.check_out < payload.check_in:
+        if to_utc_time(payload.check_out) < to_utc_time(payload.check_in):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="check_out must be after check_in",
@@ -489,7 +490,11 @@ def update_attendance(
         attendance.check_in = update_data["check_in"]
 
     if "check_out" in update_data and update_data["check_out"] is not None:
-        if attendance.check_in is not None and update_data["check_out"] < attendance.check_in:
+        if (
+            attendance.check_in is not None
+            and to_utc_time(update_data["check_out"])
+            < to_utc_time(attendance.check_in)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="check_out must be after check_in",

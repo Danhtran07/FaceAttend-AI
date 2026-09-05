@@ -19,6 +19,8 @@ NOSE_TIP = 1
 #   - Person turns THEIR RIGHT → nose moves RIGHT in image → yaw_proxy POSITIVE
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
+LEFT_EYE_LANDMARKS = (33, 160, 158, 133, 153, 144)
+RIGHT_EYE_LANDMARKS = (362, 385, 387, 263, 373, 380)
 
 # Thresholds
 # yaw_proxy < -0.30  → person has turned LEFT
@@ -29,7 +31,7 @@ NEUTRAL_THRESHOLD    =  0.15   # within ±0.15 counts as "facing forward"
 
 # Smile blendshape threshold (0–1 score from MediaPipe)
 SMILE_SCORE_THRESHOLD = 0.5
-BLINK_SCORE_THRESHOLD = 0.55
+BLINK_SCORE_THRESHOLD = 0.35
 
 SPOOF_TEXTURE_MIN = 50.0
 SPOOF_Z_STD_MIN   = 0.008
@@ -75,7 +77,7 @@ class LivenessEngine:
         h, w = frame.shape[:2]
 
         yaw_proxy   = self._compute_yaw_proxy(landmarks)
-        blink_score = self._compute_blink_score(result)
+        blink_score = self._compute_blink_score(result, landmarks)
         smile_score = self._compute_smile_score(result)
         lighting_mean = self._compute_lighting_mean(frame, landmarks, w, h)
         texture_var, z_std, is_spoof = self._check_spoof(frame, landmarks, w, h)
@@ -137,12 +139,32 @@ class LivenessEngine:
         right = bs.get("mouthSmileRight", 0.0)
         return float((left + right) / 2)
 
-    def _compute_blink_score(self, result) -> float:
-        """Average eye closure score from MediaPipe blendshapes."""
+    def _compute_blink_score(self, result, landmarks) -> float:
+        """Combine MediaPipe eye closure scores with geometric eye openness."""
         bs = self.extract_blendshapes(result)
         left = bs.get("eyeBlinkLeft", 0.0)
         right = bs.get("eyeBlinkRight", 0.0)
-        return float((left + right) / 2)
+        blendshape_score = (left + right) / 2
+
+        left_ear = self._eye_aspect_ratio(landmarks, LEFT_EYE_LANDMARKS)
+        right_ear = self._eye_aspect_ratio(landmarks, RIGHT_EYE_LANDMARKS)
+        ear = (left_ear + right_ear) / 2
+        geometric_score = float(np.clip((0.23 - ear) / 0.18, 0.0, 1.0))
+        return float(max(blendshape_score, geometric_score))
+
+    @staticmethod
+    def _eye_aspect_ratio(landmarks, indices: tuple[int, ...]) -> float:
+        outer, upper_a, upper_b, inner, lower_a, lower_b = (
+            landmarks[index] for index in indices
+        )
+        horizontal = np.hypot(outer.x - inner.x, outer.y - inner.y)
+        if horizontal <= 1e-6:
+            return 1.0
+        vertical = (
+            np.hypot(upper_a.x - lower_b.x, upper_a.y - lower_b.y)
+            + np.hypot(upper_b.x - lower_a.x, upper_b.y - lower_a.y)
+        )
+        return float(vertical / (2 * horizontal))
 
     def _compute_lighting_mean(self, frame, landmarks, w: int, h: int) -> float:
         xs = [lm.x for lm in landmarks]

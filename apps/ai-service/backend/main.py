@@ -377,7 +377,7 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                     await _send_response(
                         websocket, session_id, current_challenge,
                         session.challenge_index, False,
-                        "Hold still while we verify your live pulse...",
+                        "Pulse signal is not clear yet. Keep still and hold your face in frame...",
                         metrics,
                     )
                 continue
@@ -417,14 +417,15 @@ async def liveness_websocket(websocket: WebSocket, session_id: str):
                         )
                         continue
                     if metrics.rppg_is_live is not True:
-                        session.state = SessionState.FAILED
+                        session.awaiting_rppg = True
+                        session.consecutive_count = 0
                         await _send_response(
-                            websocket, session_id, ChallengeType.FAILED,
-                            session.challenges_completed, False,
-                            "A live pulse could not be verified. Please try again.",
+                            websocket, session_id, current_challenge,
+                            session.challenge_index, False,
+                            "Pulse signal is not clear yet. Keep still and hold your face in frame...",
                             metrics,
                         )
-                        break
+                        continue
 
                 session.advance_challenge()
 

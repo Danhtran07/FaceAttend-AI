@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.timezone import UTCDateTime
 
 
 class AttendanceStatus(str, Enum):
@@ -49,12 +50,12 @@ class Attendance(Base):
     )
 
     check_in: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         nullable=True,
     )
 
     check_out: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         nullable=True,
     )
 
@@ -68,13 +69,13 @@ class Attendance(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         server_default=func.now(),
         nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
