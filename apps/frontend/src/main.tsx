@@ -27,9 +27,9 @@ createRoot(
           }
         />
         <Route path="/login" element={<Login />} />
-        <Route path="/recognition" element={<App />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
+            <Route path="/recognition" element={<App />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
