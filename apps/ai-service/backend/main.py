@@ -41,7 +41,8 @@ from models import (
     VerifyFaceRequest, VerifyFaceResponse,
     SearchFaceRequest, SearchFaceResponse, SearchMatch, FaceRecordResponse,
     AnalyzeRequest, AnalyzeResponse, EmotionScores,
-    LegacyEnrollRequest, LegacyRecognizeRequest, BackendRecognitionResponse,
+    LegacyEnrollRequest, LegacyRecognizeCandidate, LegacyRecognizeRequest,
+    BackendRecognitionResponse,
 )
 from challenge_evaluator import is_neutral, evaluate_challenge
 from liveness_engine import LivenessEngine
@@ -596,6 +597,32 @@ def _has_completed_liveness(session_id: str | None) -> bool:
     )
 
 
+def _find_best_candidate(
+    query: np.ndarray,
+    candidates: list[LegacyRecognizeCandidate],
+) -> list[tuple[int, float]]:
+    query_norm = np.linalg.norm(query)
+    if query_norm == 0:
+        return []
+
+    best_by_employee: dict[int, float] = {}
+    normalized_query = query / query_norm
+    for candidate in candidates:
+        embedding = np.asarray(candidate.embedding, dtype=np.float32)
+        if embedding.shape != query.shape:
+            continue
+        norm = np.linalg.norm(embedding)
+        if norm == 0:
+            continue
+        similarity = float(np.dot(normalized_query, embedding / norm))
+        best_by_employee[candidate.employee_id] = max(
+            best_by_employee.get(candidate.employee_id, -1.0),
+            similarity,
+        )
+
+    return sorted(best_by_employee.items(), key=lambda item: item[1], reverse=True)
+
+
 @app.post("/face/recognize", response_model=BackendRecognitionResponse)
 def legacy_recognize(body: LegacyRecognizeRequest):
     """Recognize one face against Backend-provided employee embeddings.
@@ -629,21 +656,20 @@ def legacy_recognize(body: LegacyRecognizeRequest):
         return _recognition_error(422, "MULTIPLE_FACES", "Multiple faces detected", True)
 
     query = np.asarray(result.embedding, dtype=np.float32)
-    best_id = None
-    best_similarity = -1.0
-    for candidate in body.candidates:
-        embedding = np.asarray(candidate.embedding, dtype=np.float32)
-        if embedding.shape != query.shape:
-            continue
-        norm = np.linalg.norm(embedding)
-        if norm == 0:
-            continue
-        similarity = float(np.dot(query, embedding / norm))
-        if similarity > best_similarity:
-            best_id = candidate.employee_id
-            best_similarity = similarity
+    ranked_matches = _find_best_candidate(query, body.candidates)
+    best_id, best_similarity = ranked_matches[0] if ranked_matches else (None, -1.0)
 
     if best_id is not None and best_similarity >= body.threshold:
+        if (
+            len(ranked_matches) > 1
+            and best_similarity - ranked_matches[1][1] < body.min_margin
+        ):
+            return _recognition_error(
+                422,
+                "AMBIGUOUS_MATCH",
+                "Multiple employees have similarly matching faces",
+                True,
+            )
         return BackendRecognitionResponse(
             matched=True,
             employee_id=best_id,

@@ -7,7 +7,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from face_recognition_engine import FaceAnalysisResult, FaceRecognitionEngine
-from models import BackendRecognitionResponse, LegacyRecognizeRequest
+from main import _find_best_candidate
+from models import BackendRecognitionResponse, LegacyRecognizeCandidate, LegacyRecognizeRequest
 
 
 def test_backend_request_accepts_liveness_session_and_response_contract():
@@ -69,3 +70,17 @@ def test_recognition_engine_distinguishes_invalid_image_bytes():
 
     assert result.image_valid is False
     assert result.face_detected is False
+
+
+def test_best_candidate_collapses_multiple_embeddings_per_employee():
+    query = np.array([1.0, 0.0], dtype=np.float32)
+    candidates = [
+        LegacyRecognizeCandidate(employee_id=1, embedding=[0.99, 0.1]),
+        LegacyRecognizeCandidate(employee_id=1, embedding=[0.8, 0.6]),
+        LegacyRecognizeCandidate(employee_id=2, embedding=[0.7, 0.7]),
+    ]
+
+    ranked = _find_best_candidate(query, candidates)
+
+    assert [employee_id for employee_id, _ in ranked] == [1, 2]
+    assert ranked[0][1] > ranked[1][1]

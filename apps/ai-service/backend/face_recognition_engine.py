@@ -12,7 +12,7 @@ import insightface
 from insightface.app import FaceAnalysis
 
 SIMILARITY_THRESHOLD = 0.45   # cosine similarity above this = same person
-MODEL_DIR = Path(__file__).parent / "insightface_models"
+MODEL_DIR = Path.home() / ".insightface"
 MODEL_DIR.mkdir(exist_ok=True)
 
 
