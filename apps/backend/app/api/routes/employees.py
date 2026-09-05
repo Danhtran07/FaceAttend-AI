@@ -39,7 +39,8 @@ def get_employees(
 @router.post("/{employee_id}/face", status_code=status.HTTP_201_CREATED)
 def enroll_employee_face(
     employee_id: int,
-    image: UploadFile = File(...),
+    images: list[UploadFile] | None = File(default=None),
+    image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -48,13 +49,22 @@ def enroll_employee_face(
     if employee is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
 
-    image_bytes = image.file.read()
-    if not image_bytes or not (image.content_type or "").startswith("image/"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A valid image file is required")
+    enrollment_images = list(images or [])
+    if image is not None:
+        enrollment_images.append(image)
+    if not enrollment_images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one image file is required")
 
     client = AIRecognitionClient()
+    embeddings: list[list[float]] = []
     try:
-        result = client.enroll_face(image_bytes)
+        for enrollment_image in enrollment_images:
+            image_bytes = enrollment_image.file.read()
+            if not image_bytes or not (enrollment_image.content_type or "").startswith("image/"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="All files must be valid images")
+            result = client.enroll_face(image_bytes)
+            if result.embedding is not None:
+                embeddings.append(result.embedding)
     except AIServiceTimeoutError as exc:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
     except AIServiceUnavailableError as exc:
@@ -64,10 +74,16 @@ def enroll_employee_face(
     finally:
         client.close()
 
+    if not embeddings:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No usable face was found")
+
     db.query(FaceData).filter(FaceData.employee_id == employee_id).delete()
-    db.add(FaceData(employee_id=employee_id, embedding=result.embedding, model_name="insightface"))
+    db.add_all(
+        FaceData(employee_id=employee_id, embedding=embedding, model_name="insightface")
+        for embedding in embeddings
+    )
     db.commit()
-    return {"success": True, "employee_id": employee_id}
+    return {"success": True, "employee_id": employee_id, "embeddings_saved": len(embeddings)}
 
 
 @router.get(

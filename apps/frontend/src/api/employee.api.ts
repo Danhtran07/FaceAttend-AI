@@ -7,13 +7,18 @@ import type {
 
 export async function enrollEmployeeFace(
   id: number,
-  image: File
-): Promise<void> {
+  images: File[]
+): Promise<{ embeddings_saved: number }> {
   const formData = new FormData();
-  formData.append("image", image);
-  await apiClient.post(`/api/employees/${id}/face`, formData, {
+  images.forEach((image) => formData.append("images", image));
+  const response = await apiClient.post<{ embeddings_saved: number }>(
+    `/api/employees/${id}/face`,
+    formData,
+    {
     headers: { "Content-Type": "multipart/form-data" },
-  });
+    }
+  );
+  return response.data;
 }
 
 export async function getEmployees(): Promise<Employee[]> {

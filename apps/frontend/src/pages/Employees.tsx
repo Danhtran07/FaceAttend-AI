@@ -550,18 +550,18 @@ export default function Employees() {
   async function handleFaceFileChange(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
-    const image = event.target.files?.[0];
+    const images = Array.from(event.target.files || []);
     const employeeId = enrollingId;
     event.target.value = "";
 
-    if (!image || employeeId === null) {
+    if (images.length === 0 || employeeId === null) {
       setEnrollingId(null);
       return;
     }
 
     try {
-      await enrollEmployeeFace(employeeId, image);
-      setFaceMessage("Face enrolled successfully. This employee can now use AI check-in.");
+      const result = await enrollEmployeeFace(employeeId, images);
+      setFaceMessage(`${result.embeddings_saved} face embeddings saved. This employee can now use AI check-in.`);
     } catch (error) {
       setFaceError(getApiErrorMessage(error));
     } finally {
@@ -673,6 +673,7 @@ export default function Employees() {
         ref={faceInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={handleFaceFileChange}
       />
