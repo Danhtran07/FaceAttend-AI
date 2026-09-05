@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ScanFace, UsersRound } from "lucide-react";
 
 import {
   createEmployee,
@@ -1015,7 +1016,7 @@ export default function Employees() {
                   text-2xl
                 "
               >
-                👥
+                <UsersRound size={28} strokeWidth={1.8} />
               </div>
 
               <h3
@@ -1388,7 +1389,7 @@ export default function Employees() {
                               disabled={enrollingId !== null || saving}
                               className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {enrollingId === employee.id ? "..." : "◉"}
+                              {enrollingId === employee.id ? "..." : <ScanFace size={17} strokeWidth={2} />}
                             </button>
 
                             {/* Edit */}

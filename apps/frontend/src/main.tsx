@@ -6,6 +6,7 @@ import Attendance from "./pages/Attendance";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import App from "./pages/App";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -33,6 +34,7 @@ createRoot(
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

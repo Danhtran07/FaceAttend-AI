@@ -27,3 +27,22 @@ export interface AttendanceUpdate {
   check_out?: string | null;
   status?: AttendanceStatus;
 }
+
+export interface AttendanceCalendarDay {
+  date: string;
+  day_of_week: number;
+  is_weekend: boolean;
+  attendance_id: number | null;
+  status: AttendanceStatus;
+  has_record: boolean;
+  check_in: string | null;
+  check_out: string | null;
+}
+
+export interface AttendanceCalendarResponse {
+  employee_id: number;
+  year: number;
+  month: number;
+  total_days: number;
+  days: AttendanceCalendarDay[];
+}

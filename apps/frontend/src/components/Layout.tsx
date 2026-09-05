@@ -6,6 +6,14 @@ import {
 } from "react-router-dom";
 
 import { useState } from "react";
+import {
+  CalendarCheck2,
+  LayoutDashboard,
+  LogOut,
+  ScanFace,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 
 interface StoredUser {
   username?: string;
@@ -58,6 +66,7 @@ const isUsersActive =
   location.pathname.startsWith(
     "/users"
   );
+
 
   function handleLogout() {
     localStorage.removeItem(
@@ -250,7 +259,7 @@ const isUsersActive =
                 }
               `}
             >
-              ▦
+              <LayoutDashboard size={18} strokeWidth={2} />
             </span>
 
             <span>
@@ -289,7 +298,7 @@ const isUsersActive =
                 text-blue-600
               "
             >
-              ◉
+              <ScanFace size={18} strokeWidth={2} />
             </span>
 
             <span>
@@ -335,7 +344,7 @@ const isUsersActive =
                 }
               `}
             >
-              ♙
+              <UsersRound size={18} strokeWidth={2} />
             </span>
 
             <span>
@@ -379,11 +388,11 @@ const isUsersActive =
       }
     `}
   >
-    ✓
+    <CalendarCheck2 size={18} strokeWidth={2} />
   </span>
 
   <span>
-    Attendance
+    Attendance Calendar
   </span>
 </Link>
 {role === "ADMIN" && (
@@ -421,7 +430,7 @@ const isUsersActive =
         }
       `}
     >
-      ♙
+      <UsersRound size={18} strokeWidth={2} />
     </span>
 
     <span>
@@ -443,15 +452,11 @@ const isUsersActive =
           "
         >
 
-          <div
-            className="
-              mb-3
-              flex items-center
-              gap-3
-              rounded-xl
-              bg-slate-50
-              p-3
-            "
+          <Link
+            to="/profile"
+            onClick={closeMobileMenu}
+            aria-label="Open my profile"
+            className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3 no-underline transition hover:bg-blue-50"
           >
 
             <div
@@ -465,7 +470,7 @@ const isUsersActive =
                 text-blue-600
               "
             >
-              {avatar}
+              <UserRound size={20} strokeWidth={2} />
             </div>
 
             <div className="min-w-0">
@@ -495,7 +500,7 @@ const isUsersActive =
 
             </div>
 
-          </div>
+          </Link>
 
 
           <button
@@ -524,7 +529,7 @@ const isUsersActive =
             "
           >
             <span className="text-base">
-              ↪
+              <LogOut size={16} strokeWidth={2} />
             </span>
 
             Logout
@@ -628,13 +633,10 @@ const isUsersActive =
 
             {/* User */}
 
-            <div
-              className="
-                flex items-center
-                gap-2
-                border-l border-slate-200
-                pl-4
-              "
+            <Link
+              to="/profile"
+              aria-label="Open my profile"
+              className="flex items-center gap-2 border-l border-slate-200 pl-4 no-underline"
             >
 
               <div
@@ -647,7 +649,7 @@ const isUsersActive =
                   text-blue-600
                 "
               >
-                {avatar}
+                <UserRound size={16} strokeWidth={2} />
               </div>
 
               <span
@@ -661,7 +663,7 @@ const isUsersActive =
                 {username}
               </span>
 
-            </div>
+            </Link>
 
           </div>
 

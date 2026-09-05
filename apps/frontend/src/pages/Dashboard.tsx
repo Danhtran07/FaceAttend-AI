@@ -1,9 +1,11 @@
 import {
+  type ComponentType,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { Link } from "react-router-dom";
+import { Check, CircleAlert, Clock3, ScanFace, UsersRound } from "lucide-react";
 
 import { getEmployees } from "../api/employee.api";
 import { getAttendances } from "../api/attendance.api";
@@ -30,7 +32,7 @@ interface Statistic {
   label: string;
   value: number;
   description: string;
-  icon: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
   iconClass: string;
 }
 
@@ -243,7 +245,7 @@ export default function Dashboard() {
       value: totalEmployees,
       description:
         "Registered employees",
-      icon: "👥",
+      icon: UsersRound,
       iconClass:
         "bg-blue-50 text-blue-600",
     },
@@ -253,7 +255,7 @@ export default function Dashboard() {
       value: presentCount,
       description:
         `${attendanceRate}% attendance rate`,
-      icon: "✓",
+      icon: Check,
       iconClass:
         "bg-emerald-50 text-emerald-600",
     },
@@ -263,7 +265,7 @@ export default function Dashboard() {
       value: lateCount,
       description:
         "Today's late employees",
-      icon: "◷",
+      icon: Clock3,
       iconClass:
         "bg-amber-50 text-amber-600",
     },
@@ -273,7 +275,7 @@ export default function Dashboard() {
       value: absentCount,
       description:
         "Recorded absences",
-      icon: "!",
+      icon: CircleAlert,
       iconClass:
         "bg-red-50 text-red-600",
     },
@@ -588,7 +590,7 @@ export default function Dashboard() {
               hover:shadow-md
             "
           >
-            <span aria-hidden="true">◉</span>
+            <ScanFace size={17} strokeWidth={2} aria-hidden="true" />
             Face Attendance
           </Link>
 
@@ -679,7 +681,7 @@ export default function Dashboard() {
                     ${stat.iconClass}
                   `}
                 >
-                  {stat.icon}
+                  <stat.icon size={20} strokeWidth={2} />
                 </div>
 
               </div>

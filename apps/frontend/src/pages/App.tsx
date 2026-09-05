@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ScanFace } from "lucide-react";
 import {
   DrawingUtils,
   FaceLandmarker,
@@ -466,7 +467,7 @@ export default function App() {
                 className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-3xl text-blue-600"
                 aria-hidden="true"
               >
-                ◉
+                <ScanFace size={30} strokeWidth={1.8} />
               </div>
               <h2 className="mt-5 text-xl font-semibold text-slate-900">Ready to scan</h2>
               <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">

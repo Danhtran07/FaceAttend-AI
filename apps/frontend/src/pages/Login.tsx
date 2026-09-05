@@ -2,6 +2,7 @@ import {
   FormEvent,
   useState,
 } from "react";
+import { Check } from "lucide-react";
 
 import {
   useNavigate,
@@ -809,7 +810,7 @@ function Feature({
           text-white
         "
       >
-        ✓
+        <Check size={15} strokeWidth={2.5} />
       </div>
 
       <div>

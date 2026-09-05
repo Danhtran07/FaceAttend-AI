@@ -28,6 +28,13 @@ def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     if user.profile is None:
         user.profile = UserProfile()
         db.flush()
+
+    if user.employee is not None:
+        if user.profile.full_name is None:
+            user.profile.full_name = user.employee.full_name
+        if user.profile.email is None:
+            user.profile.email = user.employee.email
+
     return user.profile
 
 
@@ -37,9 +44,8 @@ def get_profile(
     current_user: User = Depends(get_current_user),
 ):
     profile = _get_or_create_profile(db, current_user)
-    if profile.id is None:
-        db.commit()
-        db.refresh(profile)
+    db.commit()
+    db.refresh(profile)
     return profile
 
 

@@ -1,680 +1,88 @@
-import LoadingState from "../components/LoadingState";
-import ErrorState from "../components/ErrorState";
-import EmptyState from "../components/EmptyState";
 import { useEffect, useMemo, useState } from "react";
-import {
-  createAttendance,
-  deleteAttendance,
-  getAttendances,
-  updateAttendance,
-} from "../api/attendance.api";
-import { getEmployees } from "../api/employee.api";
+
+import { getAttendanceCalendar } from "../api/attendance.api";
 import { getApiErrorMessage } from "../api/error";
-
-import type {
-  Attendance,
-  AttendanceCreate,
-  AttendanceStatus,
-  AttendanceUpdate,
-} from "../types/attendance";
-
+import { getEmployees } from "../api/employee.api";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
+import type { AttendanceCalendarResponse, AttendanceStatus } from "../types/attendance";
 import type { Employee } from "../types/employee";
+import { getCalendarCellCount, shiftMonth } from "./attendanceCalendar";
 
-const EMPTY_FORM: AttendanceCreate = {
-  employee_id: 0,
-  date: "",
-  check_in: "",
-  check_out: "",
-  status: "PRESENT",
-};
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function statusClass(status: AttendanceStatus) {
-  switch (status) {
-    case "PRESENT":
-      return "bg-green-100 text-green-700";
-
-    case "LATE":
-      return "bg-yellow-100 text-yellow-700";
-
-    case "ABSENT":
-      return "bg-red-100 text-red-700";
-
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
+function statusClass(status: AttendanceStatus, weekend: boolean) {
+  if (weekend) return "border-slate-200 bg-slate-100 text-slate-500";
+  if (status === "PRESENT") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "LATE") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-rose-200 bg-rose-50 text-rose-700";
 }
 
-function formatDateTime(value: string | null) {
-  if (!value) return "-";
-
-  return new Date(value).toLocaleString("vi-VN");
+function formatTime(value: string | null) {
+  return value ? new Date(value).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "-";
 }
 
 export default function Attendance() {
   const storedUser = localStorage.getItem("user");
-  let isAdmin = false;
-
-  try {
-    isAdmin = JSON.parse(storedUser || "{}").role === "ADMIN";
-  } catch {
-    isAdmin = false;
-  }
-
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const isAdmin = (() => { try { return JSON.parse(storedUser || "{}").role === "ADMIN"; } catch { return false; } })();
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
   const [employees, setEmployees] = useState<Employee[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
+  const [employeeId, setEmployeeId] = useState("");
+  const [calendar, setCalendar] = useState<AttendanceCalendarResponse | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  const [dateFilter, setDateFilter] = useState("");
-  const [employeeFilter, setEmployeeFilter] = useState("");
-
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  const [form, setForm] =
-    useState<AttendanceCreate>(EMPTY_FORM);
-
-  async function loadData() {
+  async function loadCalendar() {
+    if (isAdmin && !employeeId) { setCalendar(null); return; }
     try {
       setLoading(true);
       setError("");
-
-      const [attendanceData, employeeData] =
-        await Promise.all([
-          getAttendances(),
-          getEmployees(),
-        ]);
-
-      setAttendances(attendanceData);
-      setEmployees(employeeData);
+      setCalendar(await getAttendanceCalendar(year, month, employeeId ? Number(employeeId) : undefined));
     } catch (err) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "Unable to load attendance data."
-        )
-      );
-    } finally {
-      setLoading(false);
-    }
+      setError(getApiErrorMessage(err, "Unable to load attendance calendar."));
+    } finally { setLoading(false); }
   }
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!isAdmin) return;
+    getEmployees().then(setEmployees).catch((err) => setError(getApiErrorMessage(err, "Unable to load employees.")));
+  }, [isAdmin]);
 
-  const employeeMap = useMemo(() => {
-    const map = new Map<number, Employee>();
+  useEffect(() => { void loadCalendar(); }, [year, month, employeeId, isAdmin]);
 
-    employees.forEach((employee) => {
-      map.set(employee.id, employee);
+  const selectedEmployee = employees.find((employee) => String(employee.id) === employeeId);
+  const daysByDate = useMemo(() => new Map(calendar?.days.map((day) => [day.date, day])), [calendar]);
+  const cells = useMemo(() => {
+    const count = getCalendarCellCount(year, month);
+    const first = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return Array.from({ length: count }, (_, index) => {
+      const dayNumber = index - first + 1;
+      return dayNumber > 0 && dayNumber <= daysInMonth ? `${year}-${String(month).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}` : null;
     });
+  }, [year, month]);
 
-    return map;
-  }, [employees]);
-
-  const filteredAttendances = useMemo(() => {
-    return attendances.filter((item) => {
-      const matchDate =
-        !dateFilter ||
-        item.date.startsWith(dateFilter);
-
-      const matchEmployee =
-        !employeeFilter ||
-        String(item.employee_id) === employeeFilter;
-
-      return matchDate && matchEmployee;
-    });
-  }, [
-    attendances,
-    dateFilter,
-    employeeFilter,
-  ]);
-
-  function openCreate() {
-    setEditingId(null);
-
-    setForm({
-      ...EMPTY_FORM,
-      employee_id:
-        employees.length > 0
-          ? employees[0].id
-          : 0,
-    });
-
-    setError("");
-    setSuccess("");
-    setShowModal(true);
-  }
-
-  function openEdit(item: Attendance) {
-    setEditingId(item.id);
-
-    setForm({
-      employee_id: item.employee_id,
-      date: item.date,
-      check_in: item.check_in
-        ? item.check_in.slice(0, 16)
-        : "",
-      check_out: item.check_out
-        ? item.check_out.slice(0, 16)
-        : "",
-      status: item.status,
-    });
-
-    setError("");
-    setSuccess("");
-    setShowModal(true);
-  }
-
-  function closeModal() {
-    if (saving) return;
-
-    setShowModal(false);
-    setEditingId(null);
-    setForm(EMPTY_FORM);
-  }
-
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    if (!form.employee_id) {
-      setError("Please select an employee.");
-      return;
-    }
-
-    if (!form.date) {
-      setError("Please select attendance date.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
-
-      if (editingId === null) {
-        await createAttendance({
-          ...form,
-          check_in: form.check_in || null,
-          check_out: form.check_out || null,
-        });
-
-        setSuccess(
-          "Attendance created successfully."
-        );
-      } else {
-        const updateData: AttendanceUpdate = {
-  check_in: form.check_in || null,
-  check_out: form.check_out || null,
-  status: form.status,
-};
-
-        await updateAttendance(
-          editingId,
-          updateData
-        );
-
-        setSuccess(
-          "Attendance updated successfully."
-        );
-      }
-
-      setShowModal(false);
-      await loadData();
-    } catch (err) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "Failed to save attendance."
-        )
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(id: number) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this attendance record?"
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setError("");
-      setSuccess("");
-
-      await deleteAttendance(id);
-
-      setSuccess(
-        "Attendance deleted successfully."
-      );
-
-      await loadData();
-    } catch (err) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "Failed to delete attendance."
-        )
-      );
-    }
+  function moveMonth(offset: number) {
+    const next = shiftMonth(year, month, offset);
+    setYear(next.year); setMonth(next.month);
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Attendance
-          </h1>
+    <section className="space-y-6">
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Attendance overview</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Attendance calendar</h1><p className="mt-1 text-sm text-slate-500">Review check-ins by day without losing weekends or missing records.</p></div>
+        {isAdmin && <label className="w-full md:w-72"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Employee</span><select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"><option value="">Select an employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name} ({employee.employee_code})</option>)}</select></label>}
+      </header>
 
-          <p className="mt-1 text-sm text-gray-500">
-            Manage employee attendance records.
-          </p>
-        </div>
-
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={employees.length === 0}
-            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + Add Attendance
-          </button>
-        )}
-      </div>
-
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {success}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Date
-            </label>
-
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) =>
-                setDateFilter(e.target.value)
-              }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Employee
-            </label>
-
-            <select
-              value={employeeFilter}
-              onChange={(e) =>
-                setEmployeeFilter(e.target.value)
-              }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            >
-              <option value="">
-                All employees
-              </option>
-
-              {employees.map((employee) => (
-                <option
-                  key={employee.id}
-                  value={employee.id}
-                >
-                  {employee.full_name} (
-                  {employee.employee_code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={() => {
-                setDateFilter("");
-                setEmployeeFilter("");
-              }}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Clear filters
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {loading ? (
-  <LoadingState message="Loading attendance..." />
-) : error ? (
-  <ErrorState
-    message={error}
-    onRetry={loadData}
-  />
-) : filteredAttendances.length === 0 ? (
-  <EmptyState
-    title="No attendance records"
-    message="No attendance records match your filters."
-  />
-) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Employee
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Date
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Check-in
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Check-out
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Status
-                  </th>
-
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {filteredAttendances.map((item) => {
-                  const employee =
-                    employeeMap.get(
-                      item.employee_id
-                    );
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">
-                          {employee?.full_name ??
-                            `Employee #${item.employee_id}`}
-                        </div>
-
-                        {employee && (
-                          <div className="text-xs text-gray-500">
-                            {employee.employee_code}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {item.date}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {formatDateTime(
-                          item.check_in
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {formatDateTime(
-                          item.check_out
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
-                            item.status
-                          )}`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        {isAdmin && (
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openEdit(item)
-                              }
-                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDelete(item.id)
-                              }
-                              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal */}
-      {isAdmin && showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">
-                  {editingId === null
-                    ? "Add Attendance"
-                    : "Edit Attendance"}
-                </h2>
-
-                <p className="text-sm text-gray-500">
-                  Enter attendance information.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="text-xl text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-4"
-            >
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Employee
-                </label>
-
-                <select
-                  value={form.employee_id}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      employee_id: Number(
-                        e.target.value
-                      ),
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  required
-                >
-                  <option value={0}>
-                    Select employee
-                  </option>
-
-                  {employees.map((employee) => (
-                    <option
-                      key={employee.id}
-                      value={employee.id}
-                    >
-                      {employee.full_name} (
-                      {employee.employee_code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Date
-                </label>
-
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      date: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Check-in
-                  </label>
-
-                  <input
-                    type="datetime-local"
-                    value={form.check_in ?? ""}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        check_in:
-                          e.target.value,
-                      })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Check-out
-                  </label>
-
-                  <input
-                    type="datetime-local"
-                    value={form.check_out ?? ""}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        check_out:
-                          e.target.value,
-                      })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-
-                <select
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      status:
-                        e.target
-                          .value as AttendanceStatus,
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="PRESENT">
-                    PRESENT
-                  </option>
-                  <option value="LATE">
-                    LATE
-                  </option>
-                  <option value="ABSENT">
-                    ABSENT
-                  </option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingId === null
-                    ? "Create"
-                    : "Update"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+      {error && !loading && <ErrorState message={error} onRetry={() => void loadCalendar()} />}
+      {isAdmin && !employeeId ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm"><p className="font-semibold text-slate-700">Choose an employee to view their calendar.</p><p className="mt-1 text-sm text-slate-500">The calendar will load as soon as an employee is selected.</p></div> : loading ? <div className="rounded-2xl border border-slate-200 bg-white shadow-sm"><LoadingState message="Loading attendance calendar..." /></div> : calendar && <div className="space-y-4">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-bold text-slate-900">{selectedEmployee?.full_name || "My attendance"}</h2><p className="text-sm text-slate-500">{monthNames[month - 1]} {year} · {calendar.total_days} days</p></div><div className="flex items-center gap-2"><button type="button" aria-label="Previous month" onClick={() => moveMonth(-1)} className="h-9 w-9 rounded-lg border border-slate-200 text-lg text-slate-600 hover:bg-slate-50">‹</button><button type="button" onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth() + 1); }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Today</button><button type="button" aria-label="Next month" onClick={() => moveMonth(1)} className="h-9 w-9 rounded-lg border border-slate-200 text-lg text-slate-600 hover:bg-slate-50">›</button></div></div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">{weekDays.map((day) => <div key={day} className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-500">{day}</div>)}</div><div className="grid grid-cols-7">{cells.map((date, index) => { const day = date ? daysByDate.get(date) : undefined; return <div key={date || `empty-${index}`} className={`min-h-[112px] border-b border-r border-slate-100 p-2 ${!date ? "bg-slate-50/60" : ""} ${day?.is_weekend ? "bg-slate-50" : ""}`}>{day && <div className={`flex h-full min-h-[96px] flex-col rounded-xl border p-2 ${statusClass(day.status, day.is_weekend)}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-bold">{Number(date.slice(-2))}</span><span className="text-[10px] font-bold uppercase">{day.is_weekend ? "Weekend" : day.has_record ? day.status : "No record"}</span></div><div className="mt-auto text-xs"><div>In <strong>{formatTime(day.check_in)}</strong></div><div>Out <strong>{formatTime(day.check_out)}</strong></div></div></div>}</div>; })}</div></div>
+        <div className="flex flex-wrap gap-3 text-xs font-semibold text-slate-500"><span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-emerald-400" />Present</span><span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-amber-400" />Late</span><span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-rose-400" />Absent</span><span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-slate-300" />Weekend / no record</span></div>
+      </div>}
+    </section>
   );
 }
