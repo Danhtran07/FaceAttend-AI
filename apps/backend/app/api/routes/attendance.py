@@ -1,8 +1,7 @@
 import calendar
-import base64
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,7 +16,9 @@ from app.schemas.attendance import (
     AttendanceCalendarResponse,
     AttendanceCalendarDay,
     AttendanceResponse,
-    AttendanceRecognitionRequest,
+    AttendanceRecognitionData,
+    AttendanceRecognitionEmployee,
+    AttendanceRecognitionResponse,
     AttendanceUpdate,
 )
 from app.schemas.ai import AIRecognitionCandidate
@@ -183,23 +184,22 @@ def get_attendance(
 
 @router.post(
     "/recognize",
-    response_model=AttendanceResponse,
+    response_model=AttendanceRecognitionResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def recognize_attendance(
-    payload: AttendanceRecognitionRequest,
+    image: UploadFile = File(...),
+    liveness_session_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
     ai_client: AIRecognitionClient = Depends(_get_ai_client),
     current_user: User = Depends(get_current_user),
 ):
     del current_user
-    try:
-        image = payload.image.split(",", 1)[-1]
-        image_bytes = base64.b64decode(image, validate=True)
-    except (ValueError, TypeError):
+    image_bytes = image.file.read()
+    if not image_bytes or not (image.content_type or "").startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid base64 image",
+            detail="A valid image file is required",
         )
 
     candidates = [
@@ -214,7 +214,7 @@ def recognize_attendance(
         recognition = ai_client.recognize(
             image_bytes,
             candidates,
-            liveness_session_id=payload.liveness_session_id,
+            liveness_session_id=liveness_session_id,
         )
     except AIServiceTimeoutError as exc:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
@@ -223,12 +223,35 @@ def recognize_attendance(
     except AIServiceResponseError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
+    if recognition.error_code == "NO_FACE":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No face detected")
+    if recognition.error_code == "MULTIPLE_FACES":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Multiple faces detected")
+    if recognition.error_code == "FACE_NOT_RECOGNIZED":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Face was not recognized")
+    if not recognition.liveness:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Liveness validation failed")
+
     try:
-        return record_recognition_attendance(db, recognition)
+        attendance = record_recognition_attendance(db, recognition)
     except RecognitionRejectedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except AttendancePersistenceError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return AttendanceRecognitionResponse(
+        success=True,
+        employee=AttendanceRecognitionEmployee(
+            id=attendance.employee.id,
+            name=attendance.employee.full_name,
+        ),
+        attendance=attendance,
+        recognition=AttendanceRecognitionData(
+            matched=recognition.matched,
+            confidence=recognition.confidence,
+            liveness=recognition.liveness,
+        ),
+    )
 
 
 @router.get(

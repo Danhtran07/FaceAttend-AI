@@ -23,11 +23,6 @@ class AttendanceUpdate(BaseModel):
     status: AttendanceStatus | None = None
 
 
-class AttendanceRecognitionRequest(BaseModel):
-    image: str
-    liveness_session_id: str | None = None
-
-
 class AttendanceResponse(AttendanceBase):
     id: int
     check_in: datetime | None = None
@@ -41,6 +36,24 @@ class AttendanceResponse(AttendanceBase):
         return to_vietnam_time(value)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceRecognitionEmployee(BaseModel):
+    id: int
+    name: str
+
+
+class AttendanceRecognitionData(BaseModel):
+    matched: bool
+    confidence: float
+    liveness: bool
+
+
+class AttendanceRecognitionResponse(BaseModel):
+    success: bool
+    employee: AttendanceRecognitionEmployee
+    attendance: AttendanceResponse
+    recognition: AttendanceRecognitionData
 
 
 class AttendanceCalendarDay(BaseModel):
