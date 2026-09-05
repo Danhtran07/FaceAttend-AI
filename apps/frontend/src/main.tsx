@@ -7,8 +7,10 @@ import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
+import Users from "./pages/Users";
 import App from "./pages/App";
 import Layout from "./components/Layout";
+import AdminRoute from "./components/AdminRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import "./index.css";
 
@@ -35,6 +37,14 @@ createRoot(
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/profile" element={<Profile />} />
+            <Route
+              path="/users"
+              element={
+                <AdminRoute>
+                  <Users />
+                </AdminRoute>
+              }
+            />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
