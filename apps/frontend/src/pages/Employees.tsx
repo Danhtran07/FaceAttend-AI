@@ -138,7 +138,15 @@ export default function Employees() {
   const [faceMessage, setFaceMessage] = useState("");
   const [faceError, setFaceError] = useState("");
   const [enrollingId, setEnrollingId] = useState<number | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [capturedFrames, setCapturedFrames] = useState<File[]>([]);
+  const [submittingEnrollment, setSubmittingEnrollment] = useState(false);
   const faceInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
 
   /* ==========================================================
@@ -548,11 +556,154 @@ export default function Employees() {
     }
   }
 
+  function stopCameraStream() {
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    const video = cameraVideoRef.current;
+    if (video) {
+      video.srcObject = null;
+    }
+  }
+
+  async function openCameraForEnrollment() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is not supported by this browser.");
+      return;
+    }
+
+    try {
+      setCameraError("");
+      setCameraLoading(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      const video = cameraVideoRef.current;
+      if (!video) {
+        throw new Error("Camera preview is unavailable.");
+      }
+
+      video.srcObject = stream;
+      await video.play();
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Camera permission was denied. Please allow camera access and try again."
+          : getApiErrorMessage(error, "Unable to open the camera.");
+      setCameraError(message);
+    } finally {
+      setCameraLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!showCameraModal) {
+      stopCameraStream();
+      return;
+    }
+
+    void openCameraForEnrollment();
+
+    return () => {
+      stopCameraStream();
+    };
+  }, [showCameraModal]);
+
+  function closeCameraModal() {
+    setShowCameraModal(false);
+    setCapturedFrames([]);
+    setCameraError("");
+    setCameraLoading(false);
+    setEnrollingId(null);
+    stopCameraStream();
+  }
+
+  async function handleCaptureFrame() {
+    const video = cameraVideoRef.current;
+    const canvas = cameraCanvasRef.current;
+
+    if (!video || !canvas) {
+      setCameraError("The camera is not ready yet. Please try again.");
+      return;
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError("The camera is still starting. Please wait a moment.");
+      return;
+    }
+
+    try {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Canvas is not available.");
+      }
+
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (nextBlob) => {
+            if (nextBlob) {
+              resolve(nextBlob);
+              return;
+            }
+            reject(new Error("Unable to encode the camera image."));
+          },
+          "image/jpeg",
+          0.9
+        );
+      });
+
+      const file = new File([blob], `employee-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setCapturedFrames((current) => {
+        const nextFrames = [...current, file];
+        return nextFrames;
+      });
+      setCameraError("");
+    } catch (error) {
+      setCameraError(getApiErrorMessage(error, "Unable to capture the face frame."));
+    }
+  }
+
+  async function submitCapturedFrames() {
+    if (enrollingId === null || capturedFrames.length === 0) {
+      return;
+    }
+
+    try {
+      setSubmittingEnrollment(true);
+      setFaceError("");
+      const result = await enrollEmployeeFace(enrollingId, capturedFrames);
+      setFaceMessage(`${result.embeddings_saved} face embeddings saved. This employee can now use AI check-in.`);
+      closeCameraModal();
+    } catch (error) {
+      setFaceError(getApiErrorMessage(error));
+    } finally {
+      setSubmittingEnrollment(false);
+    }
+  }
+
   function startFaceEnrollment(employeeId: number) {
     setFaceError("");
     setFaceMessage("");
     setEnrollingId(employeeId);
-    faceInputRef.current?.click();
+    setCapturedFrames([]);
+    setShowCameraModal(true);
   }
 
   async function handleFaceFileChange(
@@ -685,6 +836,70 @@ export default function Employees() {
         className="hidden"
         onChange={handleFaceFileChange}
       />
+
+      {showCameraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-600">Face enrollment</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">Capture live face sample</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              <video
+                ref={cameraVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-[420px] w-full object-cover"
+              />
+              <canvas ref={cameraCanvasRef} className="hidden" />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-500">
+                {capturedFrames.length > 0 ? `${capturedFrames.length} frame(s) captured` : "Capture 3 clean face samples for stronger matching"}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCaptureFrame}
+                  disabled={cameraLoading || submittingEnrollment}
+                  className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Capture frame
+                </button>
+
+                <button
+                  type="button"
+                  onClick={submitCapturedFrames}
+                  disabled={capturedFrames.length === 0 || submittingEnrollment}
+                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submittingEnrollment ? "Saving..." : "Save enrollment"}
+                </button>
+              </div>
+            </div>
+
+            {(cameraError || faceError) && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {cameraError || faceError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {(faceMessage || faceError) && (
         <div
