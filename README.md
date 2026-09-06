@@ -33,13 +33,85 @@ This repository is a monorepo organized under a standard `apps/` folder:
 
 Each service contains its own app entrypoint and can run independently.
 
+## Quick Start for Team Members
+
+Follow these steps from the repository root to get the project running locally.
+
+### 1) Clone and configure environment
+
+```bash
+git clone <repository-url>
+cd intergration
+copy .env.example .env
+```
+
+Check the generated `.env` file and make sure the values match your local setup. The default values are already prepared for Docker-based local development.
+
+> Important: keep the real `.env` file local and do not commit it to Git. Only the example file should be shared.
+
+### 2) Start backend + database + AI service with Docker
+
+```bash
+docker compose up -d --build
+```
+
+This will start:
+
+- PostgreSQL database
+- FastAPI backend on http://localhost:8000
+- AI service on http://localhost:8002
+
+Health checks:
+
+- Backend: http://localhost:8000/health
+- AI service: http://localhost:8002/health
+
+The backend container runs Alembic migrations automatically before starting the API.
+
+### 3) Start the frontend in a separate terminal
+
+```bash
+cd apps/frontend
+npm install
+npm run dev
+```
+
+Then open:
+
+- Frontend: http://localhost:5173
+
+Vite is configured to proxy `/api` requests to the backend, so the frontend usually does not require a separate API base URL during local development.
+
+### 4) Useful commands for members
+
+```bash
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f ai-service
+docker compose down
+```
+
+If `8000` is already in use, edit `BACKEND_PORT` in `.env` before running Docker Compose. If the AI service port is occupied, change `AI_SERVICE_HOST_PORT` in `.env`.
+
+### 5) JWT secret
+
+JWT configuration belongs only in the backend environment. Do not put `JWT_SECRET_KEY` in frontend env files.
+
+For local development, generate a random secret:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Then set it in `.env` as `JWT_SECRET_KEY`. Keep the same secret across all backend instances that need to validate the same tokens.
+
 ## Run With Docker (recommended)
 
 Requirements: Docker Desktop with Compose, Node.js 18 or newer, and Git.
 
 From the repository root:
 
-```
+```bash
 copy .env.example .env
 docker compose up -d --build
 ```
@@ -54,7 +126,7 @@ The services are available at:
 
 Run the frontend in a second terminal:
 
-```
+```bash
 cd apps/frontend
 npm install
 npm run dev
@@ -68,7 +140,7 @@ JWT configuration belongs only in the backend environment. Never put
 shared or production environment, replace the example secret with a random
 value, for example:
 
-```
+```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
@@ -78,7 +150,7 @@ invalidates existing login sessions.
 
 Useful commands:
 
-```
+```bash
 docker compose ps
 docker compose logs -f backend
 docker compose down
