@@ -142,6 +142,19 @@ The main goal is to provide a secure, modern attendance workflow with:
 
 > Note: This is a demo and learning project, not a production-ready enterprise deployment.
 
+## AI Service Source References
+
+This project uses AI face detection, alignment, embedding, and recognition techniques inspired by open-source computer vision and face recognition libraries. The implementation is adapted for this demo and learning project rather than taken as a production-ready external package.
+
+### Key references and inspiration
+
+- InsightFace: https://github.com/deepinsight/insightface
+- Face recognition and embedding research based on ArcFace / face recognition pipelines
+- Open-source Face Detection and Alignment workflows commonly used in facial recognition systems
+- Model and preprocessing patterns adapted from practical face recognition demos in the open-source AI community
+
+> This project is for educational and demonstration purposes. The AI service is built as a learning implementation and does not represent an official production model deployment from the referenced repositories.
+
 ## Quick Start for Team Members
 
 Follow the steps below to run the project locally.
