@@ -236,6 +236,11 @@ def recognize_attendance(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Multiple faces detected")
     if recognition.error_code == "FACE_NOT_RECOGNIZED":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Face was not recognized")
+    if recognition.error_code == "AMBIGUOUS_MATCH":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Multiple employees have similarly matching faces",
+        )
     if not recognition.liveness:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Liveness validation failed")
 

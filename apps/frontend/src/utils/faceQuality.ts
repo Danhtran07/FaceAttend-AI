@@ -47,6 +47,7 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
   const faceCenterX = width / 2;
   const faceCenterY = height / 2;
   let centerEnergy = 0;
+  let centerPixelCount = 0;
   let totalEnergy = 0;
 
   for (let y = 0; y < height; y += 1) {
@@ -63,11 +64,16 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
       totalEnergy += luminance;
       if (distance <= centeredFaceBias) {
         centerEnergy += luminance;
+        centerPixelCount += 1;
       }
     }
   }
 
-  const faceCenterRatio = totalEnergy > 0 ? (centerEnergy / totalEnergy) * 100 : 0;
+  const averageLuminance = sampleCount > 0 ? brightnessSum / sampleCount : 0;
+  const centerAverageLuminance = centerPixelCount > 0 ? centerEnergy / centerPixelCount : 0;
+  const faceCenterRatio = averageLuminance > 0
+    ? (centerAverageLuminance / averageLuminance) * 100
+    : 0;
   const qualityScore = (
     (brightness >= 20 && brightness <= 80 ? 38 : 12) +
     (contrast >= 12 ? 28 : 8) +

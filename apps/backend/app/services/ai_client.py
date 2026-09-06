@@ -44,12 +44,14 @@ class AIRecognitionClient:
         face_image: bytes,
         candidates: list[AIRecognitionCandidate],
         threshold: float = 0.5,
+        min_margin: float = 0.05,
         liveness_session_id: str | None = None,
     ) -> AIRecognitionResult:
         payload = {
             "image": base64.b64encode(face_image).decode("ascii"),
             "candidates": [candidate.model_dump() for candidate in candidates],
             "threshold": threshold,
+            "min_margin": min_margin,
             "liveness_session_id": liveness_session_id,
         }
 
@@ -69,7 +71,13 @@ class AIRecognitionClient:
             raise AIServiceResponseError("AI Service returned an invalid response")
 
         error_code = response_data.get("error_code")
-        if error_code in {"NO_FACE", "MULTIPLE_FACES", "FACE_NOT_RECOGNIZED", "LIVENESS_FAILED"}:
+        if error_code in {
+            "NO_FACE",
+            "MULTIPLE_FACES",
+            "FACE_NOT_RECOGNIZED",
+            "AMBIGUOUS_MATCH",
+            "LIVENESS_FAILED",
+        }:
             response_data = {
                 **response_data,
                 "matched": False,
