@@ -25,6 +25,7 @@ type CheckInState =
   | "failure";
 
 const LIVENESS_SESSION_KEY = "liveness_session_id";
+const FAST_ATTENDANCE = true;
 const FACE_LANDMARKER_MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
@@ -188,6 +189,15 @@ export default function App() {
         void startFaceMesh().catch(() => undefined);
       });
 
+      if (FAST_ATTENDANCE) {
+        setLivenessComplete(true);
+        setFeedback("Face mesh active. Hold still for fast attendance scan...");
+        window.setTimeout(() => {
+          void capture();
+        }, 1200);
+        return;
+      }
+
       const session = await createLivenessSession();
       sessionStorage.setItem(LIVENESS_SESSION_KEY, session.session_id);
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -292,7 +302,8 @@ export default function App() {
       setState("recognizing");
       const response = await recognizeAttendance(
         image,
-        sessionStorage.getItem(LIVENESS_SESSION_KEY) || undefined
+        FAST_ATTENDANCE ? undefined : sessionStorage.getItem(LIVENESS_SESSION_KEY) || undefined,
+        FAST_ATTENDANCE
       );
       setResult(response);
       stopCamera();
@@ -446,17 +457,17 @@ export default function App() {
           <canvas ref={canvasRef} className="hidden" />
           {state === "camera" ? (
             <>
-              <button
+              {!FAST_ATTENDANCE && <button
                 type="button"
                 onClick={capture}
                 disabled={!livenessComplete}
                 className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {livenessComplete ? "Capture" : "Complete liveness verification first"}
-              </button>
+              </button>}
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-                  {challenge === "COMPLETE" ? "Verification complete" : challenge.replaceAll("_", " ") || "Liveness check"}
+                  {FAST_ATTENDANCE ? "Fast attendance scan" : challenge === "COMPLETE" ? "Verification complete" : challenge.replaceAll("_", " ") || "Liveness check"}
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-700">{feedback}</p>
               </div>

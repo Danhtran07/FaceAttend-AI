@@ -25,7 +25,7 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
   }
 
   let brightnessSum = 0;
-  let contrastSum = 0;
+  let luminanceSquareSum = 0;
   let sampleCount = 0;
 
   for (let i = 0; i < data.length; i += 4) {
@@ -34,14 +34,16 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
     const b = data[i + 2];
     const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
     brightnessSum += luminance;
+    luminanceSquareSum += luminance * luminance;
     sampleCount += 1;
-
-    const localContrast = Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
-    contrastSum += localContrast / 765;
   }
 
-  const brightness = (brightnessSum / sampleCount) * 100;
-  const contrast = (contrastSum / sampleCount) * 100;
+  const averageLuminance = sampleCount > 0 ? brightnessSum / sampleCount : 0;
+  const luminanceVariance = sampleCount > 0
+    ? Math.max(0, luminanceSquareSum / sampleCount - averageLuminance * averageLuminance)
+    : 0;
+  const brightness = averageLuminance * 100;
+  const contrast = Math.sqrt(luminanceVariance) * 100;
 
   const centeredFaceBias = Math.min(width, height) * 0.16;
   const faceCenterX = width / 2;
@@ -69,14 +71,13 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
     }
   }
 
-  const averageLuminance = sampleCount > 0 ? brightnessSum / sampleCount : 0;
   const centerAverageLuminance = centerPixelCount > 0 ? centerEnergy / centerPixelCount : 0;
   const faceCenterRatio = averageLuminance > 0
     ? (centerAverageLuminance / averageLuminance) * 100
     : 0;
   const qualityScore = (
     (brightness >= 20 && brightness <= 80 ? 38 : 12) +
-    (contrast >= 12 ? 28 : 8) +
+    (contrast >= 2.5 ? 28 : 8) +
     (faceCenterRatio >= 12 ? 20 : 8) +
     (brightness >= 35 && brightness <= 70 ? 14 : 4)
   );
@@ -91,7 +92,7 @@ export function evaluateFaceCaptureQuality(imageData: ImageData | FaceImageDataL
     };
   }
 
-  if (contrast < 4) {
+  if (contrast < 1.5) {
     return {
       valid: false,
       score: qualityScore,

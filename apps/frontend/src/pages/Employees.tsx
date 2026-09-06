@@ -4,6 +4,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  DrawingUtils,
+  FaceLandmarker,
+  FilesetResolver,
+} from "@mediapipe/tasks-vision";
 import { Pencil, ScanFace, Search, Trash2, UsersRound } from "lucide-react";
 
 import {
@@ -13,6 +18,7 @@ import {
   getEmployees,
   updateEmployee,
 } from "../api/employee.api";
+import { createLivenessSession } from "../api/recognition.api";
 
 import {
   getApiErrorMessage,
@@ -53,6 +59,9 @@ const emptyForm: EmployeeForm = {
   department: "",
   user_id: "",
 };
+
+const FACE_LANDMARKER_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 
 /* ============================================================
@@ -147,10 +156,23 @@ export default function Employees() {
   const [cameraError, setCameraError] = useState("");
   const [capturedFrames, setCapturedFrames] = useState<File[]>([]);
   const [submittingEnrollment, setSubmittingEnrollment] = useState(false);
-  const faceInputRef = useRef<HTMLInputElement>(null);
+  const [enrollmentChallenge, setEnrollmentChallenge] = useState("WAITING");
+  const [enrollmentChallengeIndex, setEnrollmentChallengeIndex] = useState(-1);
+  const [enrollmentFeedback, setEnrollmentFeedback] = useState("Preparing face scan...");
+  const [livenessComplete, setLivenessComplete] = useState(false);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const livenessCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const livenessSocketRef = useRef<WebSocket | null>(null);
+  const livenessTimerRef = useRef<number | null>(null);
+  const meshAnimationRef = useRef<number | null>(null);
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const autoScanTimerRef = useRef<number | null>(null);
+  const captureInFlightRef = useRef(false);
+  const capturedFramesRef = useRef<File[]>([]);
+  const submittingEnrollmentRef = useRef(false);
+  const livenessCompleteRef = useRef(false);
 
 
   /* ==========================================================
@@ -561,6 +583,26 @@ export default function Employees() {
   }
 
   function stopCameraStream() {
+    if (autoScanTimerRef.current !== null) {
+      window.clearInterval(autoScanTimerRef.current);
+      autoScanTimerRef.current = null;
+    }
+
+    if (livenessTimerRef.current !== null) {
+      window.clearInterval(livenessTimerRef.current);
+      livenessTimerRef.current = null;
+    }
+
+    livenessSocketRef.current?.close();
+    livenessSocketRef.current = null;
+
+    if (meshAnimationRef.current !== null) {
+      window.cancelAnimationFrame(meshAnimationRef.current);
+      meshAnimationRef.current = null;
+    }
+    faceLandmarkerRef.current?.close();
+    faceLandmarkerRef.current = null;
+
     const stream = cameraStreamRef.current;
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
@@ -570,6 +612,108 @@ export default function Employees() {
     const video = cameraVideoRef.current;
     if (video) {
       video.srcObject = null;
+    }
+  }
+
+  async function startEnrollmentMesh() {
+    const video = cameraVideoRef.current;
+    const canvas = document.getElementById("enrollment-mesh-canvas") as HTMLCanvasElement | null;
+    if (!video || !canvas) return;
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+    const landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: FACE_LANDMARKER_MODEL,
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+    });
+    faceLandmarkerRef.current = landmarker;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const drawingUtils = new DrawingUtils(context);
+
+    const drawMesh = () => {
+      if (!faceLandmarkerRef.current || video.videoWidth === 0 || video.videoHeight === 0) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      const result = landmarker.detectForVideo(video, performance.now());
+      for (const landmarks of result.faceLandmarks) {
+        drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_TESSELATION, {
+          color: "rgba(45, 212, 191, 0.72)",
+          lineWidth: 1,
+        });
+        drawingUtils.drawLandmarks(landmarks, {
+          color: "rgba(255, 255, 255, 0.9)",
+          radius: 1,
+        });
+      }
+      meshAnimationRef.current = window.requestAnimationFrame(drawMesh);
+    };
+
+    drawMesh();
+  }
+
+  async function startEnrollmentLiveness() {
+    try {
+      const session = await createLivenessSession();
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const token = localStorage.getItem("access_token");
+      const socket = new WebSocket(
+        `${protocol}//${window.location.host}/api/attendance/liveness/${session.session_id}?access_token=${encodeURIComponent(token || "")}`
+      );
+      socket.binaryType = "arraybuffer";
+      livenessSocketRef.current = socket;
+
+      socket.onopen = () => {
+        setEnrollmentFeedback("Keep your face inside the frame...");
+        livenessTimerRef.current = window.setInterval(() => {
+          const video = cameraVideoRef.current;
+          const canvas = livenessCanvasRef.current;
+          if (!video || !canvas || socket.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (blob && socket.readyState === WebSocket.OPEN) socket.send(blob);
+          }, "image/jpeg", 0.75);
+        }, 1000 / 12);
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data) as {
+          challenge?: string;
+          challenge_index?: number;
+          feedback?: string;
+          error?: string;
+        };
+        if (message.error) {
+          setCameraError(message.error);
+          return;
+        }
+        setEnrollmentChallenge(message.challenge || "WAITING");
+        setEnrollmentChallengeIndex(message.challenge_index ?? -1);
+        setEnrollmentFeedback(message.feedback || "Follow the instruction on screen...");
+        if (message.challenge === "COMPLETE") {
+          livenessCompleteRef.current = true;
+          setLivenessComplete(true);
+          setEnrollmentFeedback("Liveness verified. Hold still while we scan 3 samples...");
+          if (livenessTimerRef.current !== null) {
+            window.clearInterval(livenessTimerRef.current);
+            livenessTimerRef.current = null;
+          }
+          socket.close();
+        }
+      };
+      socket.onerror = () => setCameraError("Unable to connect to liveness verification.");
+    } catch (error) {
+      setCameraError(getApiErrorMessage(error, "Unable to start liveness verification."));
     }
   }
 
@@ -599,6 +743,8 @@ export default function Employees() {
 
       video.srcObject = stream;
       await video.play();
+      void startEnrollmentMesh().catch(() => setCameraError("Unable to load face mesh."));
+      void startEnrollmentLiveness();
     } catch (error) {
       const message =
         error instanceof DOMException && error.name === "NotAllowedError"
@@ -617,15 +763,32 @@ export default function Employees() {
     }
 
     void openCameraForEnrollment();
+    autoScanTimerRef.current = window.setInterval(() => {
+      if (livenessCompleteRef.current && capturedFramesRef.current.length < 3 && !submittingEnrollmentRef.current) {
+        void handleCaptureFrame();
+      }
+    }, 1400);
 
     return () => {
       stopCameraStream();
     };
   }, [showCameraModal]);
 
+  useEffect(() => {
+    if (capturedFrames.length >= 3 && !submittingEnrollment) {
+      void submitCapturedFrames();
+    }
+  }, [capturedFrames.length, submittingEnrollment]);
+
   function closeCameraModal() {
     setShowCameraModal(false);
+    capturedFramesRef.current = [];
+    livenessCompleteRef.current = false;
     setCapturedFrames([]);
+    setLivenessComplete(false);
+    setEnrollmentChallenge("WAITING");
+    setEnrollmentChallengeIndex(-1);
+    setEnrollmentFeedback("Preparing face scan...");
     setCameraError("");
     setCameraLoading(false);
     setEnrollingId(null);
@@ -633,6 +796,10 @@ export default function Employees() {
   }
 
   async function handleCaptureFrame() {
+    if (captureInFlightRef.current || capturedFramesRef.current.length >= 3) {
+      return;
+    }
+
     const video = cameraVideoRef.current;
     const canvas = cameraCanvasRef.current;
 
@@ -647,6 +814,7 @@ export default function Employees() {
     }
 
     try {
+      captureInFlightRef.current = true;
       const width = video.videoWidth;
       const height = video.videoHeight;
       canvas.width = width;
@@ -691,10 +859,16 @@ export default function Employees() {
       }
 
       const file = new File([blob], `employee-${Date.now()}.jpg`, { type: "image/jpeg" });
-      setCapturedFrames((current) => [...current, file]);
+      setCapturedFrames((current) => {
+        const nextFrames = [...current, file];
+        capturedFramesRef.current = nextFrames;
+        return nextFrames;
+      });
       setCameraError("");
     } catch (error) {
       setCameraError(getApiErrorMessage(error, "Unable to capture the face frame."));
+    } finally {
+      captureInFlightRef.current = false;
     }
   }
 
@@ -704,6 +878,7 @@ export default function Employees() {
     }
 
     try {
+      submittingEnrollmentRef.current = true;
       setSubmittingEnrollment(true);
       setFaceError("");
       const result = await enrollEmployeeFace(enrollingId, capturedFrames);
@@ -712,6 +887,7 @@ export default function Employees() {
     } catch (error) {
       setFaceError(getApiErrorMessage(error));
     } finally {
+      submittingEnrollmentRef.current = false;
       setSubmittingEnrollment(false);
     }
   }
@@ -723,29 +899,6 @@ export default function Employees() {
     setCapturedFrames([]);
     setShowCameraModal(true);
   }
-
-  async function handleFaceFileChange(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
-    const images = Array.from(event.target.files || []);
-    const employeeId = enrollingId;
-    event.target.value = "";
-
-    if (images.length === 0 || employeeId === null) {
-      setEnrollingId(null);
-      return;
-    }
-
-    try {
-      const result = await enrollEmployeeFace(employeeId, images);
-      setFaceMessage(`${result.embeddings_saved} face embeddings saved. This employee can now use AI check-in.`);
-    } catch (error) {
-      setFaceError(getApiErrorMessage(error));
-    } finally {
-      setEnrollingId(null);
-    }
-  }
-
 
   /* ==========================================================
      RENDER
@@ -846,15 +999,6 @@ export default function Employees() {
 
       </header>
 
-      <input
-        ref={faceInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleFaceFileChange}
-      />
-
       {showCameraModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
@@ -873,7 +1017,7 @@ export default function Employees() {
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
               <video
                 ref={cameraVideoRef}
                 autoPlay
@@ -881,34 +1025,51 @@ export default function Employees() {
                 playsInline
                 className="h-[420px] w-full object-cover"
               />
+              <canvas
+                id="enrollment-mesh-canvas"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">
+                <span className="rounded-full bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
+                  {enrollmentFeedback}
+                </span>
+              </div>
               <canvas ref={cameraCanvasRef} className="hidden" />
+              <canvas ref={livenessCanvasRef} className="hidden" />
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-slate-500">
-                {capturedFrames.length > 0 ? `${capturedFrames.length} frame(s) captured` : "Capture 3 clean face samples for stronger matching"}
+                {livenessComplete
+                  ? `${capturedFrames.length}/3 clean frame(s) scanned`
+                  : "Complete the liveness checks before sample scanning"}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCaptureFrame}
-                  disabled={cameraLoading || submittingEnrollment}
-                  className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Capture frame
-                </button>
-
-                <button
-                  type="button"
-                  onClick={submitCapturedFrames}
-                  disabled={capturedFrames.length === 0 || submittingEnrollment}
-                  className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submittingEnrollment ? "Saving..." : "Save enrollment"}
-                </button>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                {[
+                  ["TURN_LEFT", "Quay trái", 0],
+                  ["TURN_RIGHT", "Quay phải", 1],
+                  ["MOUTH_OPEN", "Mở miệng", 2],
+                ].map(([key, label, index]: readonly [string, string, number]) => (
+                  <span
+                    key={key}
+                    className={`rounded-full px-2.5 py-1 ${
+                      enrollmentChallenge === key
+                        ? "bg-amber-100 text-amber-700"
+                        : enrollmentChallenge === "COMPLETE" || enrollmentChallengeIndex > index
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
+
+            <p className="mt-3 text-center text-sm font-semibold text-emerald-600">
+              {submittingEnrollment ? "Saving enrollment..." : livenessComplete ? "Scanning automatically..." : "Mesh tracking active"}
+            </p>
 
             {(cameraError || faceError) && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

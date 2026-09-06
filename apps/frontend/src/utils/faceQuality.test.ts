@@ -41,4 +41,25 @@ describe("evaluateFaceCaptureQuality", () => {
     expect(result.valid).toBe(false);
     expect(result.message.toLowerCase()).toMatch(/lighting|contrast|quality|brightness|capture|face|center/i);
   });
+
+  it("accepts neutral-colored images when luminance has face detail", () => {
+    const width = 320;
+    const height = 240;
+    const data = new Uint8ClampedArray(width * height * 4);
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = (y * width + x) * 4;
+        const value = 130 + Math.round(24 * Math.sin(x / 18) * Math.cos(y / 15));
+        data[idx] = value;
+        data[idx + 1] = value;
+        data[idx + 2] = value;
+        data[idx + 3] = 255;
+      }
+    }
+
+    const result = evaluateFaceCaptureQuality({ data, width, height });
+    expect(result.valid).toBe(true);
+    expect(result.contrast).toBeGreaterThan(1.5);
+  });
 });

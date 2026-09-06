@@ -197,6 +197,7 @@ def get_attendance(
 def recognize_attendance(
     image: UploadFile = File(...),
     liveness_session_id: str | None = Form(default=None),
+    fast_mode: bool = Form(default=True),
     db: Session = Depends(get_db),
     ai_client: AIRecognitionClient = Depends(_get_ai_client),
     current_user: User = Depends(get_current_user),
@@ -221,6 +222,7 @@ def recognize_attendance(
         recognition = ai_client.recognize(
             image_bytes,
             candidates,
+            fast_mode=fast_mode,
             liveness_session_id=liveness_session_id,
         )
     except AIServiceTimeoutError as exc:
@@ -240,6 +242,11 @@ def recognize_attendance(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Multiple employees have similarly matching faces",
+        )
+    if recognition.error_code == "LOW_LIGHT":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lighting is insufficient for fast attendance",
         )
     if not recognition.liveness:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Liveness validation failed")

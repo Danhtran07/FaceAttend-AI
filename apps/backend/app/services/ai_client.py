@@ -45,6 +45,7 @@ class AIRecognitionClient:
         candidates: list[AIRecognitionCandidate],
         threshold: float = 0.5,
         min_margin: float = 0.05,
+        fast_mode: bool = False,
         liveness_session_id: str | None = None,
     ) -> AIRecognitionResult:
         payload = {
@@ -52,6 +53,7 @@ class AIRecognitionClient:
             "candidates": [candidate.model_dump() for candidate in candidates],
             "threshold": threshold,
             "min_margin": min_margin,
+            "fast_mode": fast_mode,
             "liveness_session_id": liveness_session_id,
         }
 
@@ -76,6 +78,7 @@ class AIRecognitionClient:
             "MULTIPLE_FACES",
             "FACE_NOT_RECOGNIZED",
             "AMBIGUOUS_MATCH",
+            "LOW_LIGHT",
             "LIVENESS_FAILED",
         }:
             response_data = {

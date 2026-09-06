@@ -229,9 +229,10 @@ def test_recognize_attendance_sends_employee_gallery_to_ai(
             self.candidates = None
             self.liveness_session_id = None
 
-        def recognize(self, image, candidates, liveness_session_id=None):
+        def recognize(self, image, candidates, fast_mode=False, liveness_session_id=None):
             self.candidates = candidates
             self.liveness_session_id = liveness_session_id
+            assert fast_mode is True
             return AIRecognitionResult(
                 matched=True,
                 employee_id=employee.id,
