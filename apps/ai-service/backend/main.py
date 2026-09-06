@@ -644,7 +644,7 @@ def legacy_recognize(body: LegacyRecognizeRequest):
     The Backend owns employee identity data and supplies the candidate gallery.
     A completed liveness session is required, but its JWT is never parsed here.
     """
-    if not _has_completed_liveness(body.liveness_session_id):
+    if not body.fast_mode and not _has_completed_liveness(body.liveness_session_id):
         return _recognition_error(
             422,
             "LIVENESS_FAILED",
@@ -668,6 +668,13 @@ def legacy_recognize(body: LegacyRecognizeRequest):
         return _recognition_error(422, "NO_FACE", "No face detected", True)
     if result.face_count > 1:
         return _recognition_error(422, "MULTIPLE_FACES", "Multiple faces detected", True)
+
+    if body.fast_mode:
+        passive_liveness = engine.process_frame(img_bytes)
+        if passive_liveness.is_spoof:
+            return _recognition_error(422, "LIVENESS_FAILED", "Passive liveness validation failed", False)
+        if passive_liveness.is_low_light:
+            return _recognition_error(422, "LOW_LIGHT", "Lighting is insufficient for fast attendance", False)
 
     query = np.asarray(result.embedding, dtype=np.float32)
     ranked_matches = _find_best_candidate(query, body.candidates)

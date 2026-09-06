@@ -172,6 +172,7 @@ class LegacyRecognizeRequest(BaseModel):
     candidates: list[LegacyRecognizeCandidate] = Field(default_factory=list)
     threshold: float = 0.5
     min_margin: float = 0.05
+    fast_mode: bool = False
     liveness_session_id: Optional[str] = None
 
 

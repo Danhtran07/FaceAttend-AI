@@ -6,6 +6,14 @@ from app.core.database import get_db
 from app.models.employee import Employee
 from app.models.face_data import FaceData
 from app.models.user import User, UserRole
+
+
+def _validate_enrollment_quality(embeddings: list[list[float]]) -> None:
+    if len(embeddings) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least 3 valid face frames are required for a strong enrollment profile.",
+        )
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeResponse,
@@ -84,6 +92,8 @@ def enroll_employee_face(
 
     if not embeddings:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No usable face was found")
+
+    _validate_enrollment_quality(embeddings)
 
     db.query(FaceData).filter(FaceData.employee_id == employee_id).delete()
     db.add_all(
