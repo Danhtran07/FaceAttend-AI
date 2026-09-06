@@ -80,12 +80,6 @@ attendance tracking, and AI processing**.
 
 ---
 
-## Team
-
-- Khoa — AI Engineer
-- Danh — Backend Engineer
-- Tín — Frontend Engineer
-
 ## Overview
 
 This project is built as a monorepo and includes three main modules:
