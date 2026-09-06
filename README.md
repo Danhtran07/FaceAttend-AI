@@ -1,55 +1,169 @@
-# FaceAttend
+<div align="center">
 
-## Project Overview
+# FaceAttend AI
 
-Face Recognition Attendance System.
+### AI-Powered Attendance Management System
 
-## Team
-- Khoa — AI Engineer
-- Danh — Backend Engineer
-- Tín — Frontend Engineer
+<p>
+  <b>Facial Recognition</b> •
+  <b>Attendance</b> •
+  <b>Employee Management</b> •
+  <b>AI Verification</b>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=for-the-badge&logo=react&logoColor=black">
+  <img src="https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img src="https://img.shields.io/badge/AI-InsightFace-FF6B35?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+</p>
+
+<p>
+  A modern attendance management system using
+  <b>facial recognition and AI-based verification</b>
+  to automate employee check-in and check-out.
+</p>
+
+</div>
+
+---
+
+## Overview
+
+FaceAttend AI is an intelligent attendance management system
+that combines **facial recognition, employee verification,
+attendance tracking, and AI processing**.
+
+### Core Features
+
+| Feature | Description |
+|---|---|
+| Face Recognition | Identify employees using facial embeddings |
+| Check-in / Check-out | Automate attendance recording |
+| Employee Verification | Verify employee identity |
+| Attendance Tracking | Store and manage attendance records |
+| AI Processing | Face detection, alignment, embedding and matching |
+| Admin Management | Manage employees and attendance |
+| REST API | API-first backend architecture |
+| Docker | Containerized development environment |
+
+---
+
+## Architecture
+
+```text
+                    ┌─────────────────────┐
+                    │      Frontend       │
+                    │ React + TypeScript  │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │       Backend       │
+                    │ FastAPI + SQLAlchemy│
+                    └───────┬───────┬─────┘
+                            │       │
+                  ┌─────────┘       └─────────┐
+                  ▼                           ▼
+        ┌─────────────────┐          ┌─────────────────┐
+        │   PostgreSQL    │          │   AI Service    │
+        │    Database     │          │ FastAPI + AI    │
+        └─────────────────┘          └────────┬────────┘
+                                              │
+                                              ▼
+                                     ┌─────────────────┐
+                                     │   InsightFace   │
+                                     │ Face Recognition│
+                                     └─────────────────┘
+```
+
+---
+
+## Overview
+
+This project is built as a monorepo and includes three main modules:
+
+- `apps/backend/` — REST API, authentication, attendance logic, and database integration
+- `apps/ai-service/` — AI processing service for face analysis and recognition
+- `apps/frontend/` — web application for employees and administrators
+
+The main goal is to provide a secure, modern attendance workflow with:
+
+- face-based recognition
+- employee verification
+- attendance tracking
+- API-first backend architecture
+- containerized local development using Docker
 
 ## Tech Stack
 
-Frontend:
+### Frontend
 - React
 - TypeScript
+- Vite
+- Tailwind CSS
 
-Backend:
-- FastAPI
+### Backend
 - Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- JWT authentication
 
-Database:
+### AI Service
+- Python
+- FastAPI
+- InsightFace / face processing pipeline
+- Embedding-based recognition flow
+
+### Database
 - PostgreSQL
+
+### DevOps / Local Setup
+- Docker
+- Docker Compose
 
 ## Project Structure
 
-This repository is a monorepo organized under a standard `apps/` folder:
-
-- `apps/backend/` — FastAPI backend service (Danh)
-- `apps/ai-service/` — AI model service (Khoa)
-- `apps/frontend/` — Vite + React frontend (Tín)
-- `database/` — database migrations and schema (if added later)
-
-Each service contains its own app entrypoint and can run independently.
+```text
+.
+├── apps/
+│   ├── backend/
+│   ├── ai-service/
+│   └── frontend/
+├── docker-compose.yml
+├── .env.example
+├── README.md
+└── LICENSE
+```
 
 ## Quick Start for Team Members
 
-Follow these steps from the repository root to get the project running locally.
+Follow the steps below to run the project locally.
 
-### 1) Clone and configure environment
+### 1) Clone the repository
 
 ```bash
 git clone <repository-url>
 cd intergration
+```
+
+### 2) Create environment variables
+
+Copy the example environment file:
+
+```bash
 copy .env.example .env
 ```
 
-Check the generated `.env` file and make sure the values match your local setup. The default values are already prepared for Docker-based local development.
+Then review the file and adjust values if needed. The default settings are prepared for Docker-based local development.
 
-> Important: keep the real `.env` file local and do not commit it to Git. Only the example file should be shared.
+> Keep your real `.env` file local and do not commit it to Git.
 
-### 2) Start backend + database + AI service with Docker
+### 3) Start all services with Docker
+
+From the repository root, run:
 
 ```bash
 docker compose up -d --build
@@ -58,17 +172,19 @@ docker compose up -d --build
 This will start:
 
 - PostgreSQL database
-- FastAPI backend on http://localhost:8000
-- AI service on http://localhost:8002
+- FastAPI backend at http://localhost:8000
+- AI service at http://localhost:8002
 
-Health checks:
+Check health endpoints:
 
 - Backend: http://localhost:8000/health
 - AI service: http://localhost:8002/health
 
-The backend container runs Alembic migrations automatically before starting the API.
+The backend container will automatically run Alembic migrations before starting the app.
 
-### 3) Start the frontend in a separate terminal
+### 4) Start the frontend separately
+
+Open a second terminal and run:
 
 ```bash
 cd apps/frontend
@@ -80,9 +196,9 @@ Then open:
 
 - Frontend: http://localhost:5173
 
-Vite is configured to proxy `/api` requests to the backend, so the frontend usually does not require a separate API base URL during local development.
+The frontend uses Vite and proxies API requests to the backend locally, so no additional API base URL configuration is normally required.
 
-### 4) Useful commands for members
+### 5) Useful commands
 
 ```bash
 docker compose ps
@@ -91,80 +207,27 @@ docker compose logs -f ai-service
 docker compose down
 ```
 
-If `8000` is already in use, edit `BACKEND_PORT` in `.env` before running Docker Compose. If the AI service port is occupied, change `AI_SERVICE_HOST_PORT` in `.env`.
+If port `8000` is already in use, update `BACKEND_PORT` in `.env`. If the AI service port is occupied, update `AI_SERVICE_HOST_PORT` in `.env`.
 
-### 5) JWT secret
+### 6) JWT secret setup
 
-JWT configuration belongs only in the backend environment. Do not put `JWT_SECRET_KEY` in frontend env files.
+JWT configuration is backend-only and should never be placed in frontend env files.
 
-For local development, generate a random secret:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-Then set it in `.env` as `JWT_SECRET_KEY`. Keep the same secret across all backend instances that need to validate the same tokens.
-
-## Run With Docker (recommended)
-
-Requirements: Docker Desktop with Compose, Node.js 18 or newer, and Git.
-
-From the repository root:
-
-```bash
-copy .env.example .env
-docker compose up -d --build
-```
-
-The backend waits for PostgreSQL and runs the Alembic migrations automatically.
-The services are available at:
-
-- Backend: http://localhost:8000
-- Backend health: http://localhost:8000/health
-- AI service: http://localhost:8002
-- AI service health: http://localhost:8002/health
-
-Run the frontend in a second terminal:
-
-```bash
-cd apps/frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173. Vite proxies `/api` requests to the backend, so no
-frontend API URL configuration is required for local development.
-
-JWT configuration belongs only in the backend environment. Never put
-`JWT_SECRET_KEY` in frontend env files or commit the real `.env` file. For a
-shared or production environment, replace the example secret with a random
-value, for example:
+Generate a secure secret locally:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Set the generated value as `JWT_SECRET_KEY` in `.env`. Keep the same secret for
-all backend instances that need to validate each other's tokens. Changing it
-invalidates existing login sessions.
+Then set it as `JWT_SECRET_KEY` in `.env`.
 
-Useful commands:
+## Local Development Without Docker
+
+If you want to run services manually instead of using Docker Compose:
+
+### Backend
 
 ```bash
-docker compose ps
-docker compose logs -f backend
-docker compose down
-```
-
-If port `8000` is already in use, change `BACKEND_PORT` in `.env`. Do not change
-the internal Docker values `POSTGRES_HOST=postgres` or `DATABASE_URL`.
-
-## Run Services Without Docker
-
-For manual development, use a local PostgreSQL instance and set `DATABASE_URL`
-accordingly. Install backend dependencies first, then run:
-
-```
 cd apps/backend
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -173,11 +236,38 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
-In another terminal:
+### Frontend
 
-```
+```bash
 cd apps/frontend
 npm install
+npm run dev
+```
+
+### AI service
+
+```bash
+cd apps/ai-service/backend
+pip install -r ../requirements.txt
+uvicorn main:app --reload --port 8001
+```
+
+The Docker setup exposes the AI service on port `8002` by default. If that port is in use, change `AI_SERVICE_HOST_PORT` in `.env`.
+
+## Environment Notes
+
+- `.env.example` is the shared template
+- `.env` is local-only and should not be committed
+- PostgreSQL credentials and JWT secret must remain in backend configuration
+- Do not change internal Docker references like `POSTGRES_HOST=postgres` or `DATABASE_URL` unless you know the system is intentionally being modified
+
+## Current Status
+
+The project includes AI-powered face recognition workflows and attendance logic across backend and AI service components. The repo is designed to support iterative development by multiple team members in parallel.
+
+## License
+
+This project is released under the project license included in the repository.
 npm run dev
 ```
 
