@@ -18,6 +18,10 @@ import {
   getApiErrorMessage,
 } from "../api/error";
 
+import {
+  evaluateFaceCaptureQuality,
+} from "../utils/faceQuality";
+
 import type {
   Employee,
   EmployeeCreate,
@@ -669,11 +673,25 @@ export default function Employees() {
         );
       });
 
+      const imageBitmap = await createImageBitmap(blob);
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = imageBitmap.width;
+      tempCanvas.height = imageBitmap.height;
+      const tempContext = tempCanvas.getContext("2d");
+      if (!tempContext) {
+        throw new Error("Image processing is not available.");
+      }
+      tempContext.drawImage(imageBitmap, 0, 0);
+      const imageData = tempContext.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const quality = evaluateFaceCaptureQuality(imageData);
+
+      if (!quality.valid) {
+        setCameraError(quality.message);
+        return;
+      }
+
       const file = new File([blob], `employee-${Date.now()}.jpg`, { type: "image/jpeg" });
-      setCapturedFrames((current) => {
-        const nextFrames = [...current, file];
-        return nextFrames;
-      });
+      setCapturedFrames((current) => [...current, file]);
       setCameraError("");
     } catch (error) {
       setCameraError(getApiErrorMessage(error, "Unable to capture the face frame."));
