@@ -144,16 +144,18 @@ The main goal is to provide a secure, modern attendance workflow with:
 
 ## AI Service Source References
 
-This project uses AI face detection, alignment, embedding, and recognition techniques inspired by open-source computer vision and face recognition libraries. The implementation is adapted for this demo and learning project rather than taken as a production-ready external package.
+This project uses the face biometrics workflow and learning approach from the following open-source reference:
 
-### Key references and inspiration
+- [amoghgg/face-biometrics-api](https://github.com/amoghgg/face-biometrics-api) — Face biometrics API with active liveness detection (head turns + smile), face recognition (1:1 verify + 1:N search), age, gender and emotion analysis. Built with FastAPI + MediaPipe + InsightFace ArcFace.
 
-- InsightFace: https://github.com/deepinsight/insightface
-- Face recognition and embedding research based on ArcFace / face recognition pipelines
-- Open-source Face Detection and Alignment workflows commonly used in facial recognition systems
-- Model and preprocessing patterns adapted from practical face recognition demos in the open-source AI community
+### What we used as reference
 
-> This project is for educational and demonstration purposes. The AI service is built as a learning implementation and does not represent an official production model deployment from the referenced repositories.
+- Face detection and liveness-check patterns
+- Face recognition and verification workflow
+- ArcFace-based embedding concepts
+- MediaPipe / InsightFace integration ideas for demo and learning purposes
+
+> This project is for educational and demonstration purposes. The AI service is inspired by the referenced repository and adapted to fit our attendance demo scenario, not copied as-is for production use.
 
 ## Quick Start for Team Members
 
