@@ -23,6 +23,8 @@
   A modern attendance management system using
   <b>facial recognition and AI-based verification</b>
   to automate employee check-in and check-out.
+  <br>
+  <b>This project is built for learning, demo, and portfolio purposes.</b>
 </p>
 
 </div>
@@ -31,9 +33,11 @@
 
 ## Overview
 
-FaceAttend AI is an intelligent attendance management system
+FaceAttend AI is a learning-focused demo project for building an intelligent attendance management system
 that combines **facial recognition, employee verification,
 attendance tracking, and AI processing**.
+
+This repository is intended to showcase how a full-stack AI application can be structured using a React frontend, FastAPI backend, PostgreSQL database, and a dedicated AI recognition service.
 
 ### Core Features
 
@@ -80,7 +84,7 @@ attendance tracking, and AI processing**.
 
 ---
 
-## Overview
+## Project Structure
 
 This project is built as a monorepo and includes three main modules:
 
@@ -124,8 +128,6 @@ The main goal is to provide a secure, modern attendance workflow with:
 - Docker
 - Docker Compose
 
-## Project Structure
-
 ```text
 .
 ├── apps/
@@ -137,6 +139,8 @@ The main goal is to provide a secure, modern attendance workflow with:
 ├── README.md
 └── LICENSE
 ```
+
+> Note: This is a demo and learning project, not a production-ready enterprise deployment.
 
 ## Quick Start for Team Members
 
