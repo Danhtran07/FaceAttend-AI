@@ -15,6 +15,7 @@ from app.models.shift import Shift
 from app.models.user import User, UserRole
 from app.models.work_schedule import WorkSchedule
 from app.schemas.ai import AIRecognitionResult
+from app.services.attendance_policy import calculate_attendance_status
 from app.services.attendance_recognition import (
     AttendancePersistenceError,
     RecognitionRejectedError,
@@ -127,6 +128,41 @@ def test_schedule_controls_late_status(db_session, employee, monday_schedule):
 
     assert compute_attendance_status(db_session, employee.id, on_time) == AttendanceStatus.PRESENT
     assert compute_attendance_status(db_session, employee.id, late) == AttendanceStatus.LATE
+
+
+def test_attendance_policy_uses_shift_tolerance(db_session, employee, monday_schedule):
+    shift = resolve_shift(db_session, employee.id, date(2026, 9, 7))
+    check_ins = [
+        datetime(2026, 9, 7, 1, 5, tzinfo=timezone.utc),
+        datetime(2026, 9, 7, 1, 14, tzinfo=timezone.utc),
+        datetime(2026, 9, 7, 1, 16, tzinfo=timezone.utc),
+    ]
+
+    assert calculate_attendance_status(check_ins[0], shift) == AttendanceStatus.PRESENT
+    assert calculate_attendance_status(check_ins[1], shift) == AttendanceStatus.PRESENT
+    assert calculate_attendance_status(check_ins[2], shift) == AttendanceStatus.LATE
+
+
+def test_recognition_persists_shift_snapshot_metrics(
+    db_session,
+    employee,
+    recognition,
+    monday_schedule,
+):
+    check_in = datetime(2026, 9, 7, 1, 16, tzinfo=timezone.utc)
+    check_out = datetime(2026, 9, 7, 10, 30, tzinfo=timezone.utc)
+
+    attendance = record_recognition_attendance(db_session, recognition, check_in)
+    record_recognition_attendance(db_session, recognition, check_out)
+    db_session.refresh(attendance)
+
+    shift = resolve_shift(db_session, employee.id, date(2026, 9, 7))
+    assert attendance.shift_id == shift.id
+    assert attendance.status == AttendanceStatus.LATE
+    assert attendance.late_minutes == 1
+    assert attendance.early_leave_minutes == 0
+    assert attendance.working_minutes == 554
+    assert attendance.overtime_minutes == 30
 
 
 def test_resolve_shift_returns_employee_shift(db_session, employee, monday_schedule):

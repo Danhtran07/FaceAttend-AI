@@ -44,6 +44,12 @@ class Attendance(Base):
         nullable=False,
     )
 
+    shift_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shifts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
@@ -68,6 +74,34 @@ class Attendance(Base):
         default=AttendanceStatus.ABSENT,
     )
 
+    late_minutes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    early_leave_minutes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    working_minutes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    overtime_minutes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),
         server_default=func.now(),
@@ -85,3 +119,5 @@ class Attendance(Base):
         "Employee",
         back_populates="attendance",
     )
+
+    shift: Mapped["Shift | None"] = relationship("Shift")
