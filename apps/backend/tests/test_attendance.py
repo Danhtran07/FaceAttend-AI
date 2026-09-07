@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,7 +12,11 @@ from app.main import app
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
 from app.models.face_data import FaceData
+from app.models.schedule_assignment import ScheduleAssignment
+from app.models.schedule_rule import ScheduleRule
+from app.models.shift import Shift
 from app.models.user import User, UserRole
+from app.models.work_schedule import WorkSchedule
 from app.schemas.ai import AIRecognitionResult
 from app.api.routes.attendance import _get_ai_client
 
@@ -267,6 +271,40 @@ def test_create_attendance_auto_sets_late_status_when_check_in_is_late(
     auth_headers,
     employee,
 ):
+    shift = Shift(
+        name="Morning Shift",
+        code="MORNING-CRUD",
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        late_tolerance_minutes=15,
+        early_checkin_minutes=30,
+        is_overnight=False,
+        is_active=True,
+    )
+    schedule = WorkSchedule(
+        name="Tuesday Schedule",
+        code="TUESDAY-CRUD",
+        is_active=True,
+    )
+    db_session.add_all([shift, schedule])
+    db_session.flush()
+    db_session.add_all(
+        [
+            ScheduleRule(
+                schedule_id=schedule.id,
+                shift_id=shift.id,
+                day_of_week=2,
+            ),
+            ScheduleAssignment(
+                employee_id=employee.id,
+                schedule_id=schedule.id,
+                effective_from=date(2026, 9, 1),
+                is_active=True,
+            ),
+        ]
+    )
+    db_session.commit()
+
     payload = {
         "employee_id": employee.id,
         "date": "2026-09-08",

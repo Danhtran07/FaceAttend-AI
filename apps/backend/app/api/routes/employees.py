@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,42 @@ def _validate_enrollment_quality(embeddings: list[list[float]]) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least 3 valid face frames are required for a strong enrollment profile.",
         )
+
+
+FACE_DUPLICATE_THRESHOLD = 0.75
+
+
+def _cosine_similarity(first: list[float], second: list[float]) -> float:
+    if len(first) != len(second) or not first:
+        return -1.0
+    first_norm = math.sqrt(sum(value * value for value in first))
+    second_norm = math.sqrt(sum(value * value for value in second))
+    if first_norm == 0 or second_norm == 0:
+        return -1.0
+    return sum(left * right for left, right in zip(first, second)) / (
+        first_norm * second_norm
+    )
+
+
+def _find_duplicate_employee(
+    db: Session,
+    employee_id: int,
+    embeddings: list[list[float]],
+) -> tuple[int, float] | None:
+    existing_faces = (
+        db.query(FaceData)
+        .filter(FaceData.employee_id != employee_id)
+        .all()
+    )
+    best_match: tuple[int, float] | None = None
+    for new_embedding in embeddings:
+        for face_data in existing_faces:
+            similarity = _cosine_similarity(new_embedding, face_data.embedding)
+            if similarity < FACE_DUPLICATE_THRESHOLD:
+                continue
+            if best_match is None or similarity > best_match[1]:
+                best_match = (face_data.employee_id, similarity)
+    return best_match
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeResponse,
@@ -94,6 +132,17 @@ def enroll_employee_face(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No usable face was found")
 
     _validate_enrollment_quality(embeddings)
+
+    duplicate = _find_duplicate_employee(db, employee_id, embeddings)
+    if duplicate is not None:
+        duplicate_employee_id, similarity = duplicate
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This face is already enrolled for another employee "
+                f"(employee_id={duplicate_employee_id}, similarity={similarity:.3f})"
+            ),
+        )
 
     db.query(FaceData).filter(FaceData.employee_id == employee_id).delete()
     db.add_all(

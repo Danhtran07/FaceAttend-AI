@@ -66,7 +66,7 @@ export default function Attendance() {
     const daysInMonth = new Date(year, month, 0).getDate();
     return Array.from({ length: count }, (_, index) => {
       const dayNumber = index - first + 1;
-      return dayNumber > 0 && dayNumber <= daysInMonth ? `${year}-${String(month).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}` : null;
+      return dayNumber > 0 && dayNumber <= daysInMonth ? `${year}-${String(month).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}` : "";
     });
   }, [year, month]);
 

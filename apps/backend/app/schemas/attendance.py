@@ -25,9 +25,14 @@ class AttendanceUpdate(BaseModel):
 
 class AttendanceResponse(AttendanceBase):
     id: int
+    shift_id: int | None = None
     check_in: datetime | None = None
     check_out: datetime | None = None
     status: AttendanceStatus
+    late_minutes: int
+    early_leave_minutes: int
+    working_minutes: int
+    overtime_minutes: int
     created_at: datetime
     updated_at: datetime
 

@@ -68,3 +68,13 @@ class Employee(Base):
         back_populates="employee",
         cascade="all, delete-orphan",
     )
+
+    schedule_assignments: Mapped[list["ScheduleAssignment"]] = relationship(
+        "ScheduleAssignment",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def face_enrolled(self) -> bool:
+        return bool(self.face_data)

@@ -1,4 +1,4 @@
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -7,6 +7,11 @@ from app.core.timezone import to_vietnam_time
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
 from app.schemas.ai import AIRecognitionResult
+from app.services.attendance_policy import (
+    calculate_attendance_metrics,
+    calculate_attendance_status,
+)
+from app.services.shift_resolver import resolve_shift
 
 
 class RecognitionRejectedError(Exception):
@@ -20,12 +25,17 @@ class AttendancePersistenceError(Exception):
     pass
 
 
-def compute_attendance_status(check_in: datetime | None) -> AttendanceStatus:
+def compute_attendance_status(
+    db: Session,
+    employee_id: int,
+    check_in: datetime | None,
+) -> AttendanceStatus:
     if check_in is None:
         return AttendanceStatus.ABSENT
-    if to_vietnam_time(check_in).time() > time(8, 30):
-        return AttendanceStatus.LATE
-    return AttendanceStatus.PRESENT
+
+    local_check_in = to_vietnam_time(check_in)
+    shift = resolve_shift(db, employee_id, local_check_in.date())
+    return calculate_attendance_status(check_in, shift)
 
 
 def record_recognition_attendance(
@@ -50,6 +60,9 @@ def record_recognition_attendance(
 
     server_now = now or datetime.now(timezone.utc)
     local_date = to_vietnam_time(server_now).date()
+    shift = resolve_shift(db, employee.id, local_date)
+    attendance_status = calculate_attendance_status(server_now, shift)
+    metrics = calculate_attendance_metrics(server_now, None, shift)
     attendance = (
         db.query(Attendance)
         .filter(
@@ -62,13 +75,26 @@ def record_recognition_attendance(
     if attendance is None:
         attendance = Attendance(
             employee_id=employee.id,
+            shift_id=shift.id if shift is not None else None,
             date=local_date,
             check_in=server_now,
-            status=compute_attendance_status(server_now),
+            status=attendance_status,
+            late_minutes=metrics.late_minutes,
+            early_leave_minutes=metrics.early_leave_minutes,
+            working_minutes=metrics.working_minutes,
+            overtime_minutes=metrics.overtime_minutes,
         )
         db.add(attendance)
     elif attendance.check_out is None:
         attendance.check_out = server_now
+        metrics = calculate_attendance_metrics(
+            attendance.check_in,
+            server_now,
+            attendance.shift,
+        )
+        attendance.early_leave_minutes = metrics.early_leave_minutes
+        attendance.working_minutes = metrics.working_minutes
+        attendance.overtime_minutes = metrics.overtime_minutes
     else:
         raise RecognitionRejectedError("Attendance already completed for today", 409)
 

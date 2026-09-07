@@ -2,7 +2,7 @@ from app.core.timezone import to_utc_time, to_vietnam_time
 import calendar
 import asyncio
 import json
-from datetime import date, time
+from datetime import date
 
 import websockets
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, status
@@ -40,6 +40,11 @@ from app.services.attendance_recognition import (
     RecognitionRejectedError,
     record_recognition_attendance,
 )
+from app.services.attendance_policy import (
+    calculate_attendance_metrics,
+    calculate_attendance_status,
+)
+from app.services.shift_resolver import resolve_shift
 
 
 router = APIRouter(
@@ -48,17 +53,22 @@ router = APIRouter(
 )
 
 
-def _compute_status(check_in, check_out=None, explicit_status=None):
+def _compute_status(
+    db: Session,
+    employee_id: int,
+    check_in,
+    check_out=None,
+    explicit_status=None,
+):
     if explicit_status is not None:
         return explicit_status
 
     if check_in is None:
         return AttendanceStatus.ABSENT
 
-    if check_in.time() > time(8, 30):
-        return AttendanceStatus.LATE
-
-    return AttendanceStatus.PRESENT
+    local_date = to_vietnam_time(check_in).date()
+    shift = resolve_shift(db, employee_id, local_date)
+    return calculate_attendance_status(check_in, shift)
 
 
 def _get_ai_client():
@@ -431,17 +441,30 @@ def create_attendance(
             )
 
     computed_status = _compute_status(
+        db,
+        payload.employee_id,
         payload.check_in,
         payload.check_out,
         payload.status,
     )
+    shift = resolve_shift(db, payload.employee_id, payload.date)
+    metrics = calculate_attendance_metrics(
+        payload.check_in,
+        payload.check_out,
+        shift,
+    )
 
     attendance = Attendance(
         employee_id=payload.employee_id,
+        shift_id=shift.id if shift is not None else None,
         date=payload.date,
         check_in=payload.check_in,
         check_out=payload.check_out,
         status=computed_status,
+        late_minutes=metrics.late_minutes,
+        early_leave_minutes=metrics.early_leave_minutes,
+        working_minutes=metrics.working_minutes,
+        overtime_minutes=metrics.overtime_minutes,
     )
 
     db.add(attendance)
@@ -513,12 +536,22 @@ def update_attendance(
             )
         attendance.check_out = update_data["check_out"]
 
+    metrics = calculate_attendance_metrics(
+        attendance.check_in,
+        attendance.check_out,
+        attendance.shift,
+    )
+    attendance.late_minutes = metrics.late_minutes
+    attendance.early_leave_minutes = metrics.early_leave_minutes
+    attendance.working_minutes = metrics.working_minutes
+    attendance.overtime_minutes = metrics.overtime_minutes
+
     if "status" in update_data and update_data["status"] is not None:
         attendance.status = update_data["status"]
     else:
-        attendance.status = _compute_status(
+        attendance.status = calculate_attendance_status(
             attendance.check_in,
-            attendance.check_out,
+            attendance.shift,
         )
 
     db.commit()

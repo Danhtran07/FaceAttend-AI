@@ -51,6 +51,19 @@ def upgrade() -> None:
             )
         return
 
+    # PostgreSQL cannot recreate the referenced employees primary key while
+    # child foreign keys still depend on it.
+    op.drop_constraint(
+        "face_data_employee_id_fkey",
+        "face_data",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "attendance_employee_id_fkey",
+        "attendance",
+        type_="foreignkey",
+    )
+
     with op.batch_alter_table("employees", recreate="always") as batch_op:
         batch_op.drop_constraint(
             "employees_user_id_fkey",
@@ -64,8 +77,34 @@ def upgrade() -> None:
             ondelete="CASCADE",
         )
 
+    op.create_foreign_key(
+        "face_data_employee_id_fkey",
+        "face_data",
+        "employees",
+        ["employee_id"],
+        ["id"],
+    )
+    op.create_foreign_key(
+        "attendance_employee_id_fkey",
+        "attendance",
+        "employees",
+        ["employee_id"],
+        ["id"],
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "face_data_employee_id_fkey",
+        "face_data",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "attendance_employee_id_fkey",
+        "attendance",
+        type_="foreignkey",
+    )
+
     with op.batch_alter_table("employees", recreate="always") as batch_op:
         batch_op.drop_constraint(
             "employees_user_id_fkey",
@@ -77,3 +116,18 @@ def downgrade() -> None:
             ["user_id"],
             ["id"],
         )
+
+    op.create_foreign_key(
+        "face_data_employee_id_fkey",
+        "face_data",
+        "employees",
+        ["employee_id"],
+        ["id"],
+    )
+    op.create_foreign_key(
+        "attendance_employee_id_fkey",
+        "attendance",
+        "employees",
+        ["employee_id"],
+        ["id"],
+    )

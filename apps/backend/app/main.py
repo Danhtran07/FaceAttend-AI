@@ -8,6 +8,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.employees import router as employees_router
 from app.api.routes.health import router as health_router
 from app.api.routes.profile import router as profile_router
+from app.api.routes.schedules import router as schedules_router
 from app.api.routes.users import router as users_router
 
 
@@ -23,3 +24,4 @@ app.include_router(employees_router)
 app.include_router(users_router)
 app.include_router(profile_router)
 app.include_router(attendance_router)
+app.include_router(schedules_router)
