@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.timezone import to_vietnam_time
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
-from app.models.schedule_assignment import ScheduleAssignment
-from app.models.schedule_rule import ScheduleRule
 from app.schemas.ai import AIRecognitionResult
+from app.services.shift_resolver import resolve_shift
 
 
 class RecognitionRejectedError(Exception):
@@ -31,38 +30,14 @@ def compute_attendance_status(
         return AttendanceStatus.ABSENT
 
     local_check_in = to_vietnam_time(check_in)
-    assignment = (
-        db.query(ScheduleAssignment)
-        .filter(
-            ScheduleAssignment.employee_id == employee_id,
-            ScheduleAssignment.is_active.is_(True),
-            ScheduleAssignment.effective_from <= local_check_in.date(),
-            (
-                ScheduleAssignment.effective_to.is_(None)
-                | (ScheduleAssignment.effective_to >= local_check_in.date())
-            ),
-        )
-        .order_by(ScheduleAssignment.effective_from.desc())
-        .first()
-    )
-    if assignment is None or not assignment.schedule.is_active:
-        return AttendanceStatus.PRESENT
-
-    rule = (
-        db.query(ScheduleRule)
-        .filter(
-            ScheduleRule.schedule_id == assignment.schedule_id,
-            ScheduleRule.day_of_week == local_check_in.isoweekday(),
-        )
-        .first()
-    )
-    if rule is None or rule.shift is None or not rule.shift.is_active:
+    shift = resolve_shift(db, employee_id, local_check_in.date())
+    if shift is None:
         return AttendanceStatus.PRESENT
 
     late_after = datetime.combine(
         local_check_in.date(),
-        rule.shift.start_time,
-    ) + timedelta(minutes=rule.shift.late_tolerance_minutes)
+        shift.start_time,
+    ) + timedelta(minutes=shift.late_tolerance_minutes)
     if local_check_in.replace(tzinfo=None) > late_after:
         return AttendanceStatus.LATE
     return AttendanceStatus.PRESENT

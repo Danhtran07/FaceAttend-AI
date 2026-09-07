@@ -1,4 +1,4 @@
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -21,6 +21,7 @@ from app.services.attendance_recognition import (
     compute_attendance_status,
     record_recognition_attendance,
 )
+from app.services.shift_resolver import resolve_shift
 
 
 @pytest.fixture
@@ -126,6 +127,19 @@ def test_schedule_controls_late_status(db_session, employee, monday_schedule):
 
     assert compute_attendance_status(db_session, employee.id, on_time) == AttendanceStatus.PRESENT
     assert compute_attendance_status(db_session, employee.id, late) == AttendanceStatus.LATE
+
+
+def test_resolve_shift_returns_employee_shift(db_session, employee, monday_schedule):
+    shift = resolve_shift(db_session, employee.id, date(2026, 9, 7))
+
+    assert shift is not None
+    assert shift.name == "Morning Shift"
+    assert shift.start_time == time(8, 0)
+    assert shift.end_time == time(17, 0)
+
+
+def test_resolve_shift_returns_none_without_assignment(db_session, employee):
+    assert resolve_shift(db_session, employee.id, date(2026, 9, 7)) is None
 
 
 def test_successful_check_out(db_session, recognition, employee):
