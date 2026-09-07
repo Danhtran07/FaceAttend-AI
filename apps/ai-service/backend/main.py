@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("face_api")
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+DUPLICATE_IDENTITY_THRESHOLD = 0.75
 
 
 class _LimitBodySize(BaseHTTPMiddleware):
@@ -637,6 +638,20 @@ def _find_best_candidate(
     return sorted(best_by_employee.items(), key=lambda item: item[1], reverse=True)
 
 
+def _is_ambiguous_match(
+    ranked_matches: list[tuple[int, float]],
+    min_margin: float,
+) -> bool:
+    if len(ranked_matches) < 2:
+        return False
+    best_similarity = ranked_matches[0][1]
+    second_similarity = ranked_matches[1][1]
+    return (
+        best_similarity - second_similarity < min_margin
+        or second_similarity >= DUPLICATE_IDENTITY_THRESHOLD
+    )
+
+
 @app.post("/face/recognize", response_model=BackendRecognitionResponse)
 def legacy_recognize(body: LegacyRecognizeRequest):
     """Recognize one face against Backend-provided employee embeddings.
@@ -681,10 +696,7 @@ def legacy_recognize(body: LegacyRecognizeRequest):
     best_id, best_similarity = ranked_matches[0] if ranked_matches else (None, -1.0)
 
     if best_id is not None and best_similarity >= body.threshold:
-        if (
-            len(ranked_matches) > 1
-            and best_similarity - ranked_matches[1][1] < body.min_margin
-        ):
+        if _is_ambiguous_match(ranked_matches, body.min_margin):
             return _recognition_error(
                 422,
                 "AMBIGUOUS_MATCH",

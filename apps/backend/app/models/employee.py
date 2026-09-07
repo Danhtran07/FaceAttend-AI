@@ -74,3 +74,7 @@ class Employee(Base):
         back_populates="employee",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def face_enrolled(self) -> bool:
+        return bool(self.face_data)

@@ -9,7 +9,7 @@ import {
   FaceLandmarker,
   FilesetResolver,
 } from "@mediapipe/tasks-vision";
-import { Pencil, ScanFace, Search, Trash2, UsersRound } from "lucide-react";
+import { BadgeCheck, Pencil, ScanFace, Search, Trash2, UsersRound } from "lucide-react";
 
 import {
   createEmployee,
@@ -499,6 +499,10 @@ export default function Employees() {
             created,
           ]
         );
+
+        closeModal();
+        startFaceEnrollment(created.id);
+        return;
       }
 
 
@@ -883,9 +887,11 @@ export default function Employees() {
       setFaceError("");
       const result = await enrollEmployeeFace(enrollingId, capturedFrames);
       setFaceMessage(`${result.embeddings_saved} face embeddings saved. This employee can now use AI check-in.`);
+      setEmployees((current) => current.map((employee) => employee.id === enrollingId ? { ...employee, face_enrolled: true } : employee));
       closeCameraModal();
     } catch (error) {
       setFaceError(getApiErrorMessage(error));
+      closeCameraModal();
     } finally {
       submittingEnrollmentRef.current = false;
       setSubmittingEnrollment(false);
@@ -1668,16 +1674,26 @@ export default function Employees() {
                               )}
                             </div>
 
-                            <span
-                              className="
-                                whitespace-nowrap
-                                text-sm
-                                font-bold
-                                text-slate-800
-                              "
-                            >
-                              {employee.full_name}
-                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate whitespace-nowrap text-sm font-bold text-slate-800">
+                                  {employee.full_name}
+                                </span>
+                                {employee.face_enrolled && (
+                                  <span title="Face capture verified">
+                                    <BadgeCheck
+                                      size={17}
+                                      strokeWidth={2.5}
+                                      className="shrink-0 text-emerald-600"
+                                      aria-label="Face capture verified"
+                                    />
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                {employee.face_enrolled ? "Face verified" : "Face not captured"}
+                              </p>
+                            </div>
 
                           </div>
 
@@ -1785,12 +1801,12 @@ export default function Employees() {
 
                             <button
                               type="button"
-                              title="Enroll face"
+                              title={employee.face_enrolled ? "Recapture face" : "Capture face"}
                               onClick={() => startFaceEnrollment(employee.id)}
                               disabled={enrollingId !== null || saving}
                               className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {enrollingId === employee.id ? "..." : <ScanFace size={17} strokeWidth={2} />}
+                              {enrollingId === employee.id ? "..." : employee.face_enrolled ? <BadgeCheck size={17} strokeWidth={2.5} /> : <ScanFace size={17} strokeWidth={2} />}
                             </button>
 
                             {/* Edit */}

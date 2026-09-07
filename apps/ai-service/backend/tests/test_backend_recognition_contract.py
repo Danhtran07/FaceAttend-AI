@@ -7,7 +7,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from face_recognition_engine import FaceAnalysisResult, FaceRecognitionEngine
-from main import _find_best_candidate
+from main import _find_best_candidate, _is_ambiguous_match
 from models import BackendRecognitionResponse, LegacyRecognizeCandidate, LegacyRecognizeRequest
 from recognition_metrics import RecognitionMetrics
 
@@ -85,6 +85,12 @@ def test_best_candidate_collapses_multiple_embeddings_per_employee():
 
     assert [employee_id for employee_id, _ in ranked] == [1, 2]
     assert ranked[0][1] > ranked[1][1]
+
+
+def test_strong_matches_for_two_employees_are_ambiguous():
+    ranked = [(1, 0.91), (2, 0.8625)]
+
+    assert _is_ambiguous_match(ranked, min_margin=0.05) is True
 
 
 def test_recognition_metrics_track_confidence_failures_and_false_positives():
