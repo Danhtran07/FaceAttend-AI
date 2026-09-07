@@ -2,7 +2,7 @@ from app.core.timezone import to_utc_time, to_vietnam_time
 import calendar
 import asyncio
 import json
-from datetime import date, time
+from datetime import date
 
 import websockets
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, status
@@ -38,6 +38,7 @@ from app.services.ai_client import (
 from app.services.attendance_recognition import (
     AttendancePersistenceError,
     RecognitionRejectedError,
+    compute_attendance_status,
     record_recognition_attendance,
 )
 
@@ -48,17 +49,20 @@ router = APIRouter(
 )
 
 
-def _compute_status(check_in, check_out=None, explicit_status=None):
+def _compute_status(
+    db: Session,
+    employee_id: int,
+    check_in,
+    check_out=None,
+    explicit_status=None,
+):
     if explicit_status is not None:
         return explicit_status
 
     if check_in is None:
         return AttendanceStatus.ABSENT
 
-    if check_in.time() > time(8, 30):
-        return AttendanceStatus.LATE
-
-    return AttendanceStatus.PRESENT
+    return compute_attendance_status(db, employee_id, check_in)
 
 
 def _get_ai_client():
@@ -431,6 +435,8 @@ def create_attendance(
             )
 
     computed_status = _compute_status(
+        db,
+        payload.employee_id,
         payload.check_in,
         payload.check_out,
         payload.status,
@@ -517,6 +523,8 @@ def update_attendance(
         attendance.status = update_data["status"]
     else:
         attendance.status = _compute_status(
+            db,
+            attendance.employee_id,
             attendance.check_in,
             attendance.check_out,
         )
