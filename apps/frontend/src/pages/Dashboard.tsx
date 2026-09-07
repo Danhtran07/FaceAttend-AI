@@ -5,7 +5,7 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { Check, CircleAlert, Clock3, ScanFace, UsersRound } from "lucide-react";
+import { Check, CircleAlert, Clock3, ScanFace, UsersRound, type LucideIcon } from "lucide-react";
 
 import { getEmployees } from "../api/employee.api";
 import { getAttendances } from "../api/attendance.api";
@@ -32,7 +32,7 @@ interface Statistic {
   label: string;
   value: number;
   description: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: LucideIcon;
   iconClass: string;
 }
 

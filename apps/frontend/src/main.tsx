@@ -8,6 +8,9 @@ import Employees from "./pages/Employees";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import Users from "./pages/Users";
+import Shifts from "./pages/Shifts";
+import Schedules from "./pages/Schedules";
+import EmployeeSchedule from "./pages/EmployeeSchedule";
 import App from "./pages/App";
 import Layout from "./components/Layout";
 import AdminRoute from "./components/AdminRoute";
@@ -36,7 +39,11 @@ createRoot(
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
+            <Route path="/my-schedule" element={<EmployeeSchedule />} />
+            <Route path="/employees/:employeeId/schedule" element={<EmployeeSchedule />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/shifts" element={<AdminRoute><Shifts /></AdminRoute>} />
+            <Route path="/schedules" element={<AdminRoute><Schedules /></AdminRoute>} />
             <Route
               path="/users"
               element={
