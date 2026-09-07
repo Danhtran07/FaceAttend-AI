@@ -68,3 +68,9 @@ class Employee(Base):
         back_populates="employee",
         cascade="all, delete-orphan",
     )
+
+    schedule_assignments: Mapped[list["ScheduleAssignment"]] = relationship(
+        "ScheduleAssignment",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
