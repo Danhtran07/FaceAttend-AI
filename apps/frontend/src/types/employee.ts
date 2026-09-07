@@ -20,16 +20,11 @@ export interface Employee {
 
 
 export interface EmployeeCreate {
-
-  employee_code: string;
-
   full_name: string;
 
   email: string;
 
   department: string | null;
-
-  user_id: number;
 }
 
 

@@ -15,18 +15,28 @@ router = APIRouter(
 )
 
 
-def _create_employee_profile(db: Session, user: User) -> None:
+def _create_employee_profile(
+    db: Session,
+    user: User,
+    *,
+    full_name: str | None = None,
+    email: str | None = None,
+    department: str | None = None,
+) -> Employee | None:
     if user.employee is not None:
-        return
+        return user.employee
 
-    db.add(
-        Employee(
-            user_id=user.id,
-            employee_code=f"EMP-{user.id:04d}",
-            full_name=user.username,
-            email=f"{user.username}@local.invalid",
-        )
+    employee = Employee(
+        user_id=user.id,
+        full_name=full_name or user.username,
+        email=email or f"{user.username}@local.invalid",
+        department=department,
     )
+    db.add(employee)
+    db.flush()
+    # The database assigns the employee ID; the public code follows it.
+    employee.employee_code = f"EMP-{employee.id:06d}"
+    return employee
 
 
 @router.get(

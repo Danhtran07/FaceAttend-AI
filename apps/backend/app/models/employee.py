@@ -9,7 +9,12 @@ from app.core.database import Base
 class Employee(Base):
     __tablename__ = "employees"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+        autoincrement=True,
+    )
 
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),

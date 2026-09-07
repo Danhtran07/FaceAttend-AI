@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://postgres:[0947216151a@]@db.bihrusertapapmvhdmjd.supabase.co:5432/postgres"
+    DATABASE_URL: str = "sqlite:///./faceattend.db"
     AI_SERVICE_URL: str = "http://ai-service:8000"
     AI_SERVICE_TIMEOUT_SECONDS: float = 10.0
     AI_SERVICE_WS_URL: str = "ws://ai-service:8000"
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../../.env"),
         case_sensitive=True,
         extra="ignore",
     )

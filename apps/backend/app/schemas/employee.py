@@ -1,29 +1,29 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.core.timezone import to_vietnam_time
 
 
 class EmployeeBase(BaseModel):
-    employee_code: str
     full_name: str
     email: str
     department: str | None = None
 
 
 class EmployeeCreate(EmployeeBase):
-    user_id: int
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8)
 
 
 class EmployeeUpdate(BaseModel):
-    employee_code: str | None = None
     full_name: str | None = None
     email: str | None = None
     department: str | None = None
 
 
 class EmployeeResponse(EmployeeBase):
+    employee_code: str
     id: int
     user_id: int
     face_enrolled: bool

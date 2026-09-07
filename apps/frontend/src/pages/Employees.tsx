@@ -357,51 +357,13 @@ export default function Employees() {
        Required fields
     -------------------------------------------------------- */
 
-    if (
-      !form.employee_code.trim() ||
-      !form.full_name.trim() ||
-      !form.email.trim()
-    ) {
+    if (!form.full_name.trim() || !form.email.trim()) {
 
       setFormError(
         "Please fill in all required fields."
       );
 
       return;
-    }
-
-
-    /* --------------------------------------------------------
-       User ID - CREATE ONLY
-    -------------------------------------------------------- */
-
-    let userId: number | undefined;
-
-    if (!editingEmployee) {
-
-      if (!form.user_id.trim()) {
-
-        setFormError(
-          "User ID is required."
-        );
-
-        return;
-      }
-
-      userId =
-        Number(form.user_id);
-
-      if (
-        !Number.isInteger(userId) ||
-        userId <= 0
-      ) {
-
-        setFormError(
-          "User ID must be a valid number."
-        );
-
-        return;
-      }
     }
 
 
@@ -468,10 +430,6 @@ export default function Employees() {
       else {
 
         const data: EmployeeCreate = {
-
-          employee_code:
-            form.employee_code.trim(),
-
           full_name:
             form.full_name.trim(),
 
@@ -482,8 +440,6 @@ export default function Employees() {
             form.department.trim()
               ? form.department.trim()
               : null,
-
-          user_id: userId!,
         };
 
 
@@ -2082,27 +2038,17 @@ export default function Employees() {
 
                 {/* Employee Code */}
 
-                <FormField
-                  label="Employee Code"
-                  required
-                >
-                  <input
-                    type="text"
-                    value={
-                      form.employee_code
-                    }
-                    onChange={(event) =>
-                      handleChange(
-                        "employee_code",
-                        event.target.value
-                      )
-                    }
-                    placeholder="EMP001"
-                    required
-                    disabled={saving}
-                    className={inputClassName}
-                  />
-                </FormField>
+                {editingEmployee && (
+                  <FormField label="Employee Code">
+                    <input
+                      type="text"
+                      value={form.employee_code}
+                      readOnly
+                      disabled={saving}
+                      className={inputClassName}
+                    />
+                  </FormField>
+                )}
 
 
                 {/* Full Name */}
@@ -2178,48 +2124,10 @@ export default function Employees() {
                 </FormField>
 
 
-                {/* User ID - CREATE ONLY */}
-
                 {!editingEmployee && (
-
-                  <FormField
-                    label="User ID"
-                    required
-                  >
-
-                    <input
-                      type="number"
-                      min="1"
-                      value={
-                        form.user_id
-                      }
-                      onChange={(event) =>
-                        handleChange(
-                          "user_id",
-                          event.target.value
-                        )
-                      }
-                      placeholder="2"
-                      required
-                      disabled={saving}
-                      className={inputClassName}
-                    />
-
-                    <p
-                      className="
-                        mt-1.5
-                        text-[11px]
-                        leading-5
-                        text-slate-400
-                      "
-                    >
-                      Enter the existing user ID
-                      that should be associated
-                      with this employee.
-                    </p>
-
-                  </FormField>
-
+                  <p className="text-xs leading-5 text-slate-400">
+                    The account, user ID, and employee code will be generated automatically.
+                  </p>
                 )}
 
               </div>

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
 from app.core.database import get_db
+from app.core.security import hash_password
 from app.models.employee import Employee
 from app.models.face_data import FaceData
 from app.models.user import User, UserRole
@@ -188,43 +189,35 @@ def create_employee(
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
-    user = (
-        db.query(User)
-        .filter(User.id == payload.user_id)
-        .first()
-    )
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    existing_employee = (
-        db.query(Employee)
-        .filter(
-            (Employee.user_id == payload.user_id)
-            | (Employee.employee_code == payload.employee_code)
-            | (Employee.email == payload.email)
-        )
-        .first()
-    )
-
-    if existing_employee is not None:
+    if db.query(User).filter(User.username == payload.username).first() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Employee already exists",
+            detail="Username already exists",
         )
 
+    if db.query(Employee).filter(Employee.email == payload.email).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already exists",
+        )
+
+    user = User(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        role=UserRole.EMPLOYEE,
+    )
+    db.add(user)
+    db.flush()
+
     employee = Employee(
-        user_id=payload.user_id,
-        employee_code=payload.employee_code,
+        user_id=user.id,
         full_name=payload.full_name,
         email=payload.email,
         department=payload.department,
     )
-
     db.add(employee)
+    db.flush()
+    employee.employee_code = f"EMP-{employee.id:06d}"
     db.commit()
     db.refresh(employee)
 
@@ -255,22 +248,6 @@ def update_employee(
         )
 
     update_data = payload.model_dump(exclude_unset=True)
-
-    if "employee_code" in update_data:
-        existing = (
-            db.query(Employee)
-            .filter(
-                Employee.employee_code == update_data["employee_code"],
-                Employee.id != employee_id,
-            )
-            .first()
-        )
-
-        if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Employee code already exists",
-            )
 
     if "email" in update_data:
         existing = (
