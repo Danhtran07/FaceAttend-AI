@@ -23,6 +23,7 @@ from app.models import (
     User,
     UserProfile,
     WorkSchedule,
+    Notification,
 )
 
 

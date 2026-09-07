@@ -11,6 +11,7 @@ import Users from "./pages/Users";
 import Shifts from "./pages/Shifts";
 import Schedules from "./pages/Schedules";
 import EmployeeSchedule from "./pages/EmployeeSchedule";
+import Notifications from "./pages/Notifications";
 import App from "./pages/App";
 import Layout from "./components/Layout";
 import AdminRoute from "./components/AdminRoute";
@@ -42,6 +43,7 @@ createRoot(
             <Route path="/my-schedule" element={<EmployeeSchedule />} />
             <Route path="/employees/:employeeId/schedule" element={<EmployeeSchedule />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/notifications" element={<Notifications />} />
             <Route path="/shifts" element={<AdminRoute><Shifts /></AdminRoute>} />
             <Route path="/schedules" element={<AdminRoute><Schedules /></AdminRoute>} />
             <Route

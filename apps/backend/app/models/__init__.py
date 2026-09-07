@@ -7,6 +7,7 @@ from app.models.schedule_rule import ScheduleRule
 from app.models.schedule_assignment import ScheduleAssignment
 from app.models.user import User, UserRole
 from app.models.user_profile import UserProfile
+from app.models.notification import Notification, NotificationSeverity, NotificationType
 
 __all__ = [
     "User",
@@ -20,4 +21,7 @@ __all__ = [
     "WorkSchedule",
     "ScheduleRule",
     "ScheduleAssignment",
+    "Notification",
+    "NotificationSeverity",
+    "NotificationType",
 ]

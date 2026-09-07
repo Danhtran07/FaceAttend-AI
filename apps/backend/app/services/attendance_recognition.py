@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 from app.core.timezone import to_vietnam_time
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
+from app.models.notification import NotificationType
 from app.schemas.ai import AIRecognitionResult
 from app.services.attendance_policy import (
     calculate_attendance_metrics,
     calculate_attendance_status,
 )
 from app.services.shift_resolver import resolve_shift
+from app.services.notification_service import create_success_notification
 
 
 class RecognitionRejectedError(Exception):
@@ -72,6 +74,8 @@ def record_recognition_attendance(
         .first()
     )
 
+    notification_type: NotificationType
+    notification_message: str
     if attendance is None:
         attendance = Attendance(
             employee_id=employee.id,
@@ -85,6 +89,8 @@ def record_recognition_attendance(
             overtime_minutes=metrics.overtime_minutes,
         )
         db.add(attendance)
+        notification_type = NotificationType.CHECK_IN_SUCCESS
+        notification_message = f"You checked in successfully at {to_vietnam_time(server_now).strftime('%I:%M %p').lstrip('0')}."
     elif attendance.check_out is None:
         attendance.check_out = server_now
         metrics = calculate_attendance_metrics(
@@ -95,8 +101,19 @@ def record_recognition_attendance(
         attendance.early_leave_minutes = metrics.early_leave_minutes
         attendance.working_minutes = metrics.working_minutes
         attendance.overtime_minutes = metrics.overtime_minutes
+        notification_type = NotificationType.CHECK_OUT_SUCCESS
+        notification_message = f"You checked out successfully at {to_vietnam_time(server_now).strftime('%I:%M %p').lstrip('0')}."
     else:
         raise RecognitionRejectedError("Attendance already completed for today", 409)
+
+    create_success_notification(
+        db,
+        employee.id,
+        local_date,
+        notification_type,
+        notification_message,
+        server_now,
+    )
 
     try:
         db.commit()

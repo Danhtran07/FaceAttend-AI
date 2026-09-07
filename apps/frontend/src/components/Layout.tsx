@@ -5,11 +5,13 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getUnreadNotificationCount } from "../api/notifications.api";
 import {
   CalendarCheck2,
   CalendarDays,
   Clock3,
+  Bell,
   LayoutDashboard,
   LogOut,
   ScanFace,
@@ -28,6 +30,25 @@ export default function Layout() {
 
   const [mobileMenuOpen, setMobileMenuOpen] =
     useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const loadCount = async () => {
+      try {
+        const count = await getUnreadNotificationCount();
+        if (active) setUnreadNotificationCount(count);
+      } catch {
+        if (active) setUnreadNotificationCount(0);
+      }
+    };
+    void loadCount();
+    const timer = window.setInterval(() => void loadCount(), 60000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const storedUser =
     localStorage.getItem("user");
@@ -403,6 +424,17 @@ const isUsersActive =
     {role === "ADMIN" ? "Attendance Calendar" : "My Attendance"}
   </span>
 </Link>
+<Link
+  to="/notifications"
+  onClick={closeMobileMenu}
+  className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold no-underline transition ${location.pathname.startsWith("/notifications") ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"}`}
+>
+  <span className={`relative flex h-9 w-9 items-center justify-center rounded-lg ${location.pathname.startsWith("/notifications") ? "bg-white text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+    <Bell size={18} strokeWidth={2} />
+    {unreadNotificationCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</span>}
+  </span>
+  <span>Notifications</span>
+</Link>
 {role === "ADMIN" && (<>
   <Link to="/shifts" onClick={closeMobileMenu} className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold no-underline transition ${isShiftsActive ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"}`}>
     <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isShiftsActive ? "bg-white text-blue-600" : "bg-slate-100 text-slate-500"}`}><Clock3 size={18} strokeWidth={2} /></span>
@@ -653,6 +685,11 @@ const isUsersActive =
               System Online
 
             </div>
+
+            <Link to="/notifications" aria-label="Open notifications" className="relative flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-blue-50 hover:text-blue-600">
+              <Bell size={19} />
+              {unreadNotificationCount > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</span>}
+            </Link>
 
 
             {/* User */}
