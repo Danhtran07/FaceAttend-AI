@@ -178,6 +178,8 @@ copy .env.example .env
 
 Then review the file and adjust values if needed. The default settings are prepared for Docker-based local development.
 
+To use the shared Supabase database, replace `DATABASE_URL` with the PostgreSQL URI from Supabase Dashboard > Connect. The Compose file will still start its local `postgres` container, but the backend does not use it when `DATABASE_URL` points to Supabase. The password must be URL-encoded when it contains characters such as `@`, `:`, `/`, or `#`.
+
 > Keep your real `.env` file local and do not commit it to Git.
 
 ### 3) Start all services with Docker
@@ -239,6 +241,8 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 Then set it as `JWT_SECRET_KEY` in `.env`.
+
+Also set a separate random value for `JWT_SECRET` in `.env`; this secret is used by the AI service for liveness tokens.
 
 ## Local Development Without Docker
 

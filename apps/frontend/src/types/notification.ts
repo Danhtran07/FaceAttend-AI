@@ -1,4 +1,4 @@
-export type NotificationSeverity = "info" | "warning" | "urgent" | "success";
+export type NotificationSeverity = "INFO" | "WARNING" | "URGENT" | "SUCCESS";
 
 export type NotificationType =
   | "CHECK_IN_REMINDER"

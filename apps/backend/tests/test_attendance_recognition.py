@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
+from app.models.notification import NotificationSeverity
 from app.models.schedule_assignment import ScheduleAssignment
 from app.models.schedule_rule import ScheduleRule
 from app.models.shift import Shift
@@ -112,6 +113,13 @@ def monday_schedule(db_session, employee):
 
 
 NOW = datetime(2026, 9, 5, 1, 0, tzinfo=timezone.utc)
+
+
+def test_notification_severity_matches_database_enum():
+    assert NotificationSeverity.INFO.value == "INFO"
+    assert NotificationSeverity.WARNING.value == "WARNING"
+    assert NotificationSeverity.URGENT.value == "URGENT"
+    assert NotificationSeverity.SUCCESS.value == "SUCCESS"
 
 
 def test_successful_check_in(db_session, recognition, employee):

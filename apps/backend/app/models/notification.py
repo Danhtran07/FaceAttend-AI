@@ -9,10 +9,10 @@ from app.core.timezone import UTCDateTime
 
 
 class NotificationSeverity(str, Enum):
-    INFO = "info"
-    WARNING = "warning"
-    URGENT = "urgent"
-    SUCCESS = "success"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    URGENT = "URGENT"
+    SUCCESS = "SUCCESS"
 
 
 class NotificationType(str, Enum):

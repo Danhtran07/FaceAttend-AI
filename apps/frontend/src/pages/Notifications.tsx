@@ -6,10 +6,10 @@ import { getNotifications, markNotificationRead } from "../api/notifications.api
 import type { Notification, NotificationSeverity } from "../types/notification";
 
 const severityStyles: Record<NotificationSeverity, { icon: typeof Info; iconClass: string; borderClass: string }> = {
-  info: { icon: Info, iconClass: "bg-blue-50 text-blue-600", borderClass: "border-blue-100" },
-  warning: { icon: TriangleAlert, iconClass: "bg-amber-50 text-amber-600", borderClass: "border-amber-100" },
-  urgent: { icon: CircleAlert, iconClass: "bg-red-50 text-red-600", borderClass: "border-red-100" },
-  success: { icon: Check, iconClass: "bg-emerald-50 text-emerald-600", borderClass: "border-emerald-100" },
+  INFO: { icon: Info, iconClass: "bg-blue-50 text-blue-600", borderClass: "border-blue-100" },
+  WARNING: { icon: TriangleAlert, iconClass: "bg-amber-50 text-amber-600", borderClass: "border-amber-100" },
+  URGENT: { icon: CircleAlert, iconClass: "bg-red-50 text-red-600", borderClass: "border-red-100" },
+  SUCCESS: { icon: Check, iconClass: "bg-emerald-50 text-emerald-600", borderClass: "border-emerald-100" },
 };
 
 function formatRelativeTime(value: string): string {
