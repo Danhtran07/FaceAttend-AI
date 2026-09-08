@@ -37,6 +37,10 @@ export interface AttendanceCalendarDay {
   has_record: boolean;
   check_in: string | null;
   check_out: string | null;
+  schedule_name: string | null;
+  shift_name: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
 }
 
 export interface AttendanceCalendarResponse {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { Clock3, MoonStar, ShieldCheck } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Clock3, MoonStar, Plus, ShieldCheck } from "lucide-react";
 
 import ErrorState from "../components/ErrorState";
 import LoadingState from "../components/LoadingState";
 import { getApiErrorMessage } from "../api/error";
-import { getShifts } from "../api/schedule.api";
+import { createShift, getShifts, type ShiftCreate } from "../api/schedule.api";
 import type { Shift } from "../types/schedule";
 
 function formatTime(value: string) {
@@ -15,6 +15,22 @@ export default function Shifts() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [form, setForm] = useState<ShiftCreate>({
+    name: "",
+    code: "",
+    description: null,
+    start_time: "08:00:00",
+    end_time: "17:00:00",
+    break_start_time: null,
+    break_end_time: null,
+    late_tolerance_minutes: 15,
+    early_checkin_minutes: 30,
+    is_overnight: false,
+    is_active: true,
+  });
 
   async function loadShifts() {
     try {
@@ -30,6 +46,22 @@ export default function Shifts() {
 
   useEffect(() => { void loadShifts(); }, []);
 
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
+    try {
+      setSaving(true);
+      const created = await createShift(form);
+      setShifts((current) => [...current, created]);
+      setFormOpen(false);
+      setForm((current) => ({ ...current, name: "", code: "", description: null }));
+    } catch (err) {
+      setFormError(getApiErrorMessage(err, "Unable to create shift."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <LoadingState message="Loading shifts..." />;
   if (error) return <ErrorState message={error} onRetry={() => void loadShifts()} />;
 
@@ -44,8 +76,16 @@ export default function Shifts() {
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Shifts</h1>
           <p className="mt-1 text-sm text-slate-500">Define the time windows and grace periods used by attendance policy.</p>
         </div>
-        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">{activeCount} active shift{activeCount === 1 ? "" : "s"}</div>
+        <div className="flex items-center gap-3"><div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">{activeCount} active shift{activeCount === 1 ? "" : "s"}</div><button type="button" onClick={() => { setFormError(""); setFormOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-700"><Plus size={17} />Create shift</button></div>
       </header>
+
+      {formOpen && <form onSubmit={handleCreate} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+        <input required placeholder="Shift name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <input required placeholder="Code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <label className="text-sm text-slate-600">Start<input required type="time" value={form.start_time.slice(0, 5)} onChange={(event) => setForm({ ...form, start_time: `${event.target.value}:00` })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label className="text-sm text-slate-600">End<input required type="time" value={form.end_time.slice(0, 5)} onChange={(event) => setForm({ ...form, end_time: `${event.target.value}:00` })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <div className="flex gap-3 sm:col-span-2 lg:col-span-4"><button disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving..." : "Save shift"}</button><button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cancel</button>{formError && <p className="self-center text-sm text-rose-600">{formError}</p>}</div>
+      </form>}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><Clock3 className="text-blue-600" size={20} /><p className="mt-4 text-2xl font-bold text-slate-900">{shifts.length}</p><p className="text-sm text-slate-500">Configured shifts</p></div>

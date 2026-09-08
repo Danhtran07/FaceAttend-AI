@@ -18,6 +18,7 @@ from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
 from app.models.face_data import FaceData
 from app.models.user import User, UserRole
+from app.models.schedule_assignment import ScheduleAssignment
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceCalendarResponse,
@@ -44,6 +45,7 @@ from app.services.attendance_policy import (
     calculate_attendance_metrics,
     calculate_attendance_status,
 )
+from app.services.shift_resolver import resolve_shift
 from app.services.shift_resolver import resolve_shift
 
 
@@ -156,6 +158,21 @@ def get_attendance_calendar(
     for day_number in range(1, total_days + 1):
         current_date = date(year, month, day_number)
         record = records_by_date.get(current_date)
+        assignment = (
+            db.query(ScheduleAssignment)
+            .filter(
+                ScheduleAssignment.employee_id == employee.id,
+                ScheduleAssignment.is_active.is_(True),
+                ScheduleAssignment.effective_from <= current_date,
+                (
+                    ScheduleAssignment.effective_to.is_(None)
+                    | (ScheduleAssignment.effective_to >= current_date)
+                ),
+            )
+            .order_by(ScheduleAssignment.effective_from.desc())
+            .first()
+        )
+        shift = resolve_shift(db, employee.id, current_date) if assignment else None
         days.append(
             AttendanceCalendarDay(
                 date=current_date,
@@ -166,6 +183,10 @@ def get_attendance_calendar(
                 has_record=record is not None,
                 check_in=record.check_in if record else None,
                 check_out=record.check_out if record else None,
+                schedule_name=assignment.schedule.name if assignment and assignment.schedule.is_active else None,
+                shift_name=shift.name if shift else None,
+                shift_start_time=shift.start_time.isoformat() if shift else None,
+                shift_end_time=shift.end_time.isoformat() if shift else None,
             )
         )
 

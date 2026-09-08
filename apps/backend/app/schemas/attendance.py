@@ -70,6 +70,10 @@ class AttendanceCalendarDay(BaseModel):
     has_record: bool
     check_in: datetime | None = None
     check_out: datetime | None = None
+    schedule_name: str | None = None
+    shift_name: str | None = None
+    shift_start_time: str | None = None
+    shift_end_time: str | None = None
 
     @field_serializer("check_in", "check_out")
     def serialize_datetime(self, value: datetime | None, _info):
