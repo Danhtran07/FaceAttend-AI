@@ -1,230 +1,501 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ScanFace } from "lucide-react";
+import {
+  DrawingUtils,
+  FaceLandmarker,
+  FilesetResolver,
+  type FaceLandmarkerResult,
+} from "@mediapipe/tasks-vision";
 
-const API_BASE = import.meta.env.VITE_AI_URL || "http://localhost:8001";
-const CHALLENGES = ["Turn Left", "Turn Right"];
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
+import { getApiErrorMessage } from "../api/error";
+import { drawMirroredVideoFrame } from "../utils/cameraMirror";
+import {
+  createLivenessSession,
+  recognizeAttendance,
+} from "../api/recognition.api";
+import type { RecognitionAttendanceResponse } from "../types/recognition";
 
-type ServerMessage = {
-  challenge?: string;
-  challenge_index?: number;
-  feedback?: string;
-  liveness_token?: string;
-};
+type CheckInState =
+  | "idle"
+  | "camera"
+  | "uploading"
+  | "recognizing"
+  | "success"
+  | "failure";
+
+const LIVENESS_SESSION_KEY = "liveness_session_id";
+const FAST_ATTENDANCE = true;
+const FACE_LANDMARKER_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+function formatTime(value: string | null) {
+  if (!value) return "-";
+  return new Date(value).toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function statusClass(status: string) {
+  if (status === "PRESENT") return "bg-emerald-50 text-emerald-700";
+  if (status === "LATE") return "bg-amber-50 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const meshCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const [running, setRunning] = useState(false);
-  const [feedback, setFeedback] = useState("Nhấn bắt đầu để kiểm tra danh tính");
+  const frameTimerRef = useRef<number | null>(null);
+  const meshAnimationRef = useRef<number | null>(null);
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const [state, setState] = useState<CheckInState>("idle");
   const [error, setError] = useState("");
-  const [challengeIndex, setChallengeIndex] = useState(-1);
+  const [result, setResult] = useState<RecognitionAttendanceResponse | null>(null);
   const [challenge, setChallenge] = useState("");
-  const [token, setToken] = useState("");
+  const [feedback, setFeedback] = useState("Preparing liveness verification...");
+  const [livenessComplete, setLivenessComplete] = useState(false);
 
-  const cleanup = (stopStream = true) => {
-    if (timerRef.current !== null) window.clearInterval(timerRef.current);
-    timerRef.current = null;
+  const stopLiveness = () => {
+    if (frameTimerRef.current !== null) {
+      window.clearInterval(frameTimerRef.current);
+      frameTimerRef.current = null;
+    }
     socketRef.current?.close();
     socketRef.current = null;
-    if (stopStream) {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
-    }
-    setRunning(false);
   };
 
-  useEffect(() => cleanup, []);
+  const stopFaceMesh = () => {
+    if (meshAnimationRef.current !== null) {
+      window.cancelAnimationFrame(meshAnimationRef.current);
+      meshAnimationRef.current = null;
+    }
+    faceLandmarkerRef.current?.close();
+    faceLandmarkerRef.current = null;
+    const canvas = meshCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  };
 
-  const start = async () => {
-    if (running || socketRef.current || timerRef.current !== null) return;
+  const stopCamera = () => {
+    stopLiveness();
+    stopFaceMesh();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  };
 
-    setError("");
-    setToken("");
-    setChallengeIndex(-1);
-    setChallenge("");
-    setFeedback("Đang mở camera...");
-    try {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera API không được hỗ trợ trên trình duyệt này.");
+  const startFaceMesh = async () => {
+    const video = videoRef.current;
+    const canvas = meshCanvasRef.current;
+    if (!video || !canvas) return;
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+    const landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: FACE_LANDMARKER_MODEL,
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+    });
+    faceLandmarkerRef.current = landmarker;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const drawingUtils = new DrawingUtils(context);
+
+    const drawMesh = () => {
+      if (!video || !canvas || !faceLandmarkerRef.current) return;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        const result: FaceLandmarkerResult = landmarker.detectForVideo(
+          video,
+          performance.now()
+        );
+        for (const landmarks of result.faceLandmarks) {
+          drawingUtils.drawConnectors(
+            landmarks,
+            FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+            { color: "rgba(125, 211, 252, 0.72)", lineWidth: 1 }
+          );
+          drawingUtils.drawLandmarks(landmarks, {
+            color: "rgba(255, 255, 255, 0.85)",
+            radius: 1,
+          });
+          context.fillStyle = "#67e8f9";
+          for (const landmark of landmarks) {
+            context.beginPath();
+            context.arc(
+              landmark.x * canvas.width,
+              landmark.y * canvas.height,
+              2,
+              0,
+              Math.PI * 2
+            );
+            context.fill();
+          }
+        }
       }
+      meshAnimationRef.current = window.requestAnimationFrame(drawMesh);
+    };
 
+    drawMesh();
+  };
+
+  useEffect(() => stopCamera, []);
+
+  const reset = () => {
+    stopCamera();
+    setError("");
+    setResult(null);
+    setChallenge("");
+    setFeedback("Preparing liveness verification...");
+    setLivenessComplete(false);
+    setState("idle");
+  };
+
+  const startCamera = async () => {
+    setError("");
+    setResult(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Camera access is not supported by this browser.");
+      setState("failure");
+      return;
+    }
+
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
       streamRef.current = stream;
-      if (!videoRef.current) throw new Error("Video element unavailable");
+      if (!videoRef.current) throw new Error("Camera preview is unavailable.");
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
+      setState("camera");
+      window.requestAnimationFrame(() => {
+        void startFaceMesh().catch(() => undefined);
+      });
 
-      const response = await fetch(`${API_BASE}/session/create`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error(`AI session creation failed (${response.status})`);
+      if (FAST_ATTENDANCE) {
+        setLivenessComplete(true);
+        setFeedback("Face mesh active. Hold still for fast attendance scan...");
+        window.setTimeout(() => {
+          void capture();
+        }, 1200);
+        return;
       }
-      const session = await response.json();
-      const socket = new WebSocket(`${API_BASE.replace(/^http/, "ws")}/ws/liveness/${session.session_id}`);
+
+      const session = await createLivenessSession();
+      sessionStorage.setItem(LIVENESS_SESSION_KEY, session.session_id);
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const token = localStorage.getItem("access_token");
+      const socket = new WebSocket(
+        `${protocol}//${window.location.host}/api/attendance/liveness/${session.session_id}?access_token=${encodeURIComponent(token || "")}`
+      );
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
 
-      const captureLoop = () => {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (!video || !canvas) return;
-        if (socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) return;
-        if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext("2d");
-        if (!context) return;
-
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-          if (!blob || socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) return;
-          void blob.arrayBuffer().then((buffer) => {
-            if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) {
-              socket.send(buffer);
-            }
-          }).catch(() => undefined);
-        }, "image/jpeg", 0.75);
-      };
-
       socket.onopen = () => {
-        setRunning(true);
-        setFeedback("Đặt khuôn mặt vào giữa khung hình...");
-        timerRef.current = window.setInterval(captureLoop, 1000 / 15);
+        setFeedback("Keep your face inside the frame...");
+        frameTimerRef.current = window.setInterval(() => {
+          const currentVideo = videoRef.current;
+          const canvas = canvasRef.current;
+          if (!currentVideo || !canvas || socket.readyState !== WebSocket.OPEN) return;
+          if (currentVideo.videoWidth === 0 || currentVideo.videoHeight === 0) return;
+          canvas.width = currentVideo.videoWidth;
+          canvas.height = currentVideo.videoHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          drawMirroredVideoFrame(context, currentVideo, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (blob && socket.readyState === WebSocket.OPEN) socket.send(blob);
+          }, "image/jpeg", 0.75);
+        }, 1000 / 12);
       };
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data) as ServerMessage;
-        setFeedback(data.feedback || "Đang phân tích...");
-        setChallengeIndex(data.challenge_index ?? -1);
-        setChallenge(data.challenge || "");
-        if (data.challenge === "COMPLETE") {
-          setFeedback("Xác minh hoàn tất");
-          setToken(data.liveness_token || "");
-          cleanup();
-        } else if (data.challenge === "FAILED") {
-          setError(data.feedback || "Xác minh thất bại");
-          cleanup(false);
+        const message = JSON.parse(event.data) as {
+          challenge?: string;
+          challenge_index?: number;
+          feedback?: string;
+          liveness_token?: string;
+          error?: string;
+        };
+        if (message.error) {
+          setError(message.error);
+          stopCamera();
+          setState("failure");
+          return;
+        }
+        setChallenge(message.challenge || "");
+        setFeedback(message.feedback || "Keep your face inside the frame...");
+        if (message.challenge === "COMPLETE") {
+          setLivenessComplete(true);
+          setFeedback("Liveness verified. Capture your face to continue.");
+          stopLiveness();
+        } else if (message.challenge === "FAILED") {
+          setError(message.feedback || "Liveness verification failed.");
+          stopCamera();
+          setState("failure");
         }
       };
       socket.onerror = () => {
-        setError("WebSocket AI liveness không kết nối. Kiểm tra AI service tại localhost:8001.");
-        cleanup();
+        setError("Unable to connect to Backend liveness verification.");
+        stopCamera();
+        setState("failure");
       };
     } catch (reason) {
-      cleanup();
-      const message = reason instanceof Error ? reason.message : "Không xác định";
-      console.error("Camera/AI startup failed:", reason);
-
-      if (message.includes("Permission") || message.includes("NotAllowedError") || message.includes("camera")) {
-        setError("Trình duyệt chưa được cấp quyền camera. Cho phép truy cập camera và thử lại.");
-      } else if (message.includes("session") || message.includes("Session failed") || message.includes("AI session")) {
-        setError("Không tạo được phiên xác minh trên AI service. Kiểm tra http://localhost:8001/health");
-      } else if (message.includes("WebSocket") || message.includes("localhost:8001")) {
-        setError("Không kết nối được AI service qua WebSocket. Kiểm tra port 8001.");
-      } else {
-        setError(`Không thể khởi động camera hoặc AI service. Chi tiết: ${message}`);
-      }
-
-      setFeedback("Chưa bắt đầu xác minh");
+      stopCamera();
+      setError(
+        reason instanceof DOMException && reason.name === "NotAllowedError"
+          ? "Camera permission was denied. Allow camera access and try again."
+          : getApiErrorMessage(reason, "Unable to open the camera.")
+      );
+      setState("failure");
     }
   };
 
-  const progress = challenge === "COMPLETE" ? 100 : Math.max(0, Math.min(100, (challengeIndex / CHALLENGES.length) * 100));
-  const stateLabel = error ? "REVIEW REQUIRED" : token ? "VERIFIED" : running ? "LIVE CHECK" : "READY";
+  const capture = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
+      setError("The camera is not ready yet. Try again in a moment.");
+      setState("failure");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setError("Unable to capture the camera frame.");
+      setState("failure");
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setState("uploading");
+
+    try {
+      const image = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) =>
+            blob
+              ? resolve(blob)
+              : reject(new Error("Unable to encode the camera image.")),
+          "image/jpeg",
+          0.9
+        );
+      });
+      setState("recognizing");
+      const response = await recognizeAttendance(
+        image,
+        FAST_ATTENDANCE ? undefined : sessionStorage.getItem(LIVENESS_SESSION_KEY) || undefined,
+        FAST_ATTENDANCE
+      );
+      setResult(response);
+      stopCamera();
+      setState("success");
+    } catch (reason) {
+      stopCamera();
+      setError(getApiErrorMessage(reason, "Recognition failed. Please try again."));
+      setState("failure");
+    }
+  };
+
+  if (state === "uploading" || state === "recognizing") {
+    return (
+      <main className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-soft">
+          <LoadingState
+            message={
+              state === "uploading"
+                ? "Uploading image..."
+                : "Detecting face, recognizing, and verifying liveness..."
+            }
+          />
+          <div className="border-t border-slate-100 px-6 py-5 text-center text-sm text-slate-500">
+            {state === "uploading"
+              ? "Uploading..."
+              : "Recognizing... Verifying liveness..."}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (state === "failure") {
+    return (
+      <main className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-soft">
+          <ErrorState message={error} onRetry={startCamera} />
+          <button
+            type="button"
+            onClick={reset}
+            className="mx-auto mb-6 block text-sm font-semibold text-slate-500 hover:text-blue-600"
+          >
+            Back to ready state
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (state === "success" && result) {
+    return (
+      <main className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-3xl rounded-2xl border border-emerald-200 bg-white shadow-soft">
+          <div className="border-b border-emerald-100 bg-emerald-50 px-6 py-7 sm:px-10">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">
+              Identity verified
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+              Attendance recorded
+            </h1>
+          </div>
+          <div className="grid gap-5 p-6 sm:grid-cols-2 sm:p-10">
+            <div className="sm:col-span-2">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Employee
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">
+                {result.employee.name}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">ID {result.employee.id}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Confidence
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">
+                {(result.recognition.confidence * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Liveness
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-700">Verified</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Check-in
+              </p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                {formatTime(result.attendance.check_in)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                Status
+              </p>
+              <span
+                className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${statusClass(result.attendance.status)}`}
+              >
+                {result.attendance.status}
+              </span>
+            </div>
+          </div>
+          <div className="border-t border-slate-100 px-6 py-5 sm:px-10">
+            <button
+              type="button"
+              onClick={reset}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Scan again
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main style={styles.page}>
-      <section style={styles.shell}>
-        <header style={styles.header}>
-          <div>
-            <span style={styles.eyebrow}>FACEATTEND / ATTENDANCE CONSOLE</span>
-            <h1 style={styles.title}>Verify attendance</h1>
-            <p style={styles.subtitle}>Live identity check before creating an attendance record.</p>
-          </div>
-          <span style={{ ...styles.badge, color: error ? "#fb7185" : token ? "#4ade80" : running ? "#67e8f9" : "#a1a1aa" }}>{stateLabel}</span>
-        </header>
-        <div style={styles.workspace}>
-          <section style={styles.primaryPanel}>
-            <div style={styles.panelBar}>
-              <div><span style={styles.sectionKicker}>BIOMETRIC INPUT</span><h2 style={styles.panelTitle}>Camera verification</h2></div>
-              <span style={styles.sessionTag}>{running ? "SESSION ACTIVE" : "SESSION IDLE"}</span>
-            </div>
-            <div style={styles.cameraWrap}>
-              <video ref={videoRef} autoPlay playsInline muted style={styles.video} />
-              <div style={{ ...styles.oval, borderColor: error ? "#fb7185" : challenge === "COMPLETE" ? "#4ade80" : running ? "#67e8f9" : "#64748b" }} />
-              <div style={styles.cameraHint}>{running ? "Keep your face inside the frame" : "Camera preview"}</div>
-              <canvas ref={canvasRef} style={{ display: "none" }} />
-            </div>
-            <section style={styles.status}>
-              <span style={styles.sectionKicker}>CURRENT INSTRUCTION</span>
-              <strong style={{ ...styles.feedback, color: error ? "#fda4af" : token ? "#86efac" : "#f4f4f5" }}>{error || feedback}</strong>
-              <div style={styles.steps}>{CHALLENGES.map((label, index) => <div key={label} style={{ ...styles.step, color: index < challengeIndex ? "#4ade80" : index === challengeIndex ? "#67e8f9" : "#71717a" }}><span style={{ ...styles.dot, borderColor: index < challengeIndex ? "#4ade80" : index === challengeIndex ? "#67e8f9" : "#3f3f46" }}>{index < challengeIndex ? "DONE" : `0${index + 1}`}</span>{label}</div>)}</div>
-              <div style={styles.track}><div style={{ ...styles.progress, width: `${progress}%` }} /></div>
-            </section>
-            <button onClick={running ? cleanup : start} style={styles.button}>{running ? "Stop verification" : token ? "Run again" : "Start verification"}</button>
-            {token && <pre style={styles.token}>{token}</pre>}
-          </section>
-
-          <aside style={styles.rail}>
-            <div style={styles.railSection}>
-              <span style={styles.sectionKicker}>RECORD CONTEXT</span>
-              <div style={styles.recordRow}><span>Employee</span><strong>Pending match</strong></div>
-              <div style={styles.recordRow}><span>Employee ID</span><strong>Not assigned</strong></div>
-              <div style={styles.recordRow}><span>Attendance state</span><strong>{token ? "Ready to record" : "Awaiting verification"}</strong></div>
-            </div>
-            <div style={styles.railSection}>
-              <span style={styles.sectionKicker}>VERIFICATION SESSION</span>
-              <div style={styles.recordRow}><span>Method</span><strong>Face liveness</strong></div>
-              <div style={styles.recordRow}><span>Required checks</span><strong>2 gestures</strong></div>
-              <div style={styles.recordRow}><span>Service</span><strong>AI / 8001</strong></div>
-            </div>
-            <div style={styles.notice}><span style={styles.sectionKicker}>NEXT STEP</span><p>{token ? "Identity verified. The attendance event can now be persisted." : "Complete both head-turn checks to continue."}</p></div>
-            <small style={styles.endpoint}>AI service: {API_BASE}</small>
-          </aside>
+    <main className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-5xl">
+        <div className="mb-8 max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+            FaceAttend AI
+          </p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            AI Face Check-in
+          </h1>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            Verify your identity with a live camera capture before recording attendance.
+          </p>
         </div>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+          <div className={state === "camera" ? "relative aspect-video overflow-hidden rounded-xl bg-slate-950" : "hidden"}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="relative z-0 h-full w-full scale-x-[-1] object-cover"
+            />
+            <canvas
+              ref={meshCanvasRef}
+              className="pointer-events-none absolute inset-0 z-10 h-full w-full scale-x-[-1]"
+            />
+            <div className="pointer-events-none absolute inset-[12%_35%] rounded-[50%] border-2 border-blue-300 shadow-[0_0_0_999px_rgba(15,23,42,0.3)]" />
+            <p className="absolute bottom-4 left-4 rounded-md bg-slate-950/75 px-3 py-2 text-xs font-medium text-white">
+              Position your face inside the frame
+            </p>
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
+          {state === "camera" ? (
+            <>
+              {!FAST_ATTENDANCE && <button
+                type="button"
+                onClick={capture}
+                disabled={!livenessComplete}
+                className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {livenessComplete ? "Capture" : "Complete liveness verification first"}
+              </button>}
+              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                  {FAST_ATTENDANCE ? "Fast attendance scan" : challenge === "COMPLETE" ? "Verification complete" : challenge.replaceAll("_", " ") || "Liveness check"}
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">{feedback}</p>
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-3xl text-blue-600"
+                aria-hidden="true"
+              >
+                <ScanFace size={30} strokeWidth={1.8} />
+              </div>
+              <h2 className="mt-5 text-xl font-semibold text-slate-900">Ready to scan</h2>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                Allow camera access, then capture a clear image of your face.
+              </p>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="mt-6 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Start Camera
+              </button>
+            </div>
+          )}
+        </section>
       </section>
     </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: { minHeight: "100vh", padding: "clamp(20px, 4vw, 56px)", background: "#09090b", color: "#f4f4f5", fontFamily: "'Space Grotesk', 'Trebuchet MS', sans-serif" },
-  shell: { width: "min(100%, 1180px)", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, marginBottom: 28 },
-  eyebrow: { color: "#67e8f9", letterSpacing: 2.4, fontSize: 10, fontWeight: 700 },
-  title: { margin: "8px 0 4px", fontSize: "clamp(28px, 4vw, 46px)", lineHeight: 1.05, letterSpacing: -1 },
-  subtitle: { margin: 0, color: "#a1a1aa", fontSize: 14 },
-  badge: { border: "1px solid currentColor", borderRadius: 999, padding: "8px 12px", fontSize: 10, letterSpacing: 1.2, fontWeight: 700, whiteSpace: "nowrap" },
-  workspace: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 16, alignItems: "start" },
-  primaryPanel: { padding: 18, background: "#111113", border: "1px solid #27272a", borderRadius: 18 },
-  panelBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
-  sectionKicker: { display: "block", color: "#71717a", fontSize: 10, letterSpacing: 1.5, fontWeight: 700 },
-  panelTitle: { margin: "5px 0 0", fontSize: 20, fontWeight: 600 },
-  sessionTag: { color: "#a1a1aa", fontSize: 10, letterSpacing: 1, paddingTop: 5 },
-  cameraWrap: { position: "relative", aspectRatio: "16 / 10", overflow: "hidden", background: "#050506", border: "1px solid #3f3f46", borderRadius: 12 },
-  video: { width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" },
-  oval: { position: "absolute", inset: "12% 35%", border: "2px solid", borderRadius: "50%", boxShadow: "0 0 0 999px rgba(0,0,0,.08)" },
-  cameraHint: { position: "absolute", bottom: 12, left: 16, color: "#d4d4d8", fontSize: 11, background: "rgba(9,9,11,.72)", padding: "6px 8px", borderRadius: 5 },
-  status: { marginTop: 14, padding: "16px 4px 2px", textAlign: "left" },
-  feedback: { display: "block", marginTop: 7, fontSize: 18, fontWeight: 500 },
-  steps: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 20 },
-  step: { display: "flex", alignItems: "center", gap: 9, fontSize: 13 },
-  dot: { display: "grid", placeItems: "center", width: 42, height: 26, border: "1px solid", borderRadius: 5, background: "#18181b", fontSize: 9, fontWeight: 700, letterSpacing: .8 },
-  track: { height: 4, marginTop: 18, background: "#27272a", borderRadius: 2, overflow: "hidden" },
-  progress: { height: "100%", background: "#67e8f9", transition: "width .2s" },
-  button: { width: "100%", marginTop: 20, padding: "13px 18px", border: "1px solid #67e8f9", borderRadius: 7, background: "#67e8f9", color: "#082f49", fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  token: { marginTop: 14, padding: 14, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#86efac", background: "#052e16", border: "1px solid #166534", borderRadius: 8, fontSize: 11 },
-  rail: { background: "#111113", border: "1px solid #27272a", borderRadius: 18, overflow: "hidden" },
-  railSection: { padding: 18, borderBottom: "1px solid #27272a" },
-  recordRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "13px 0", borderBottom: "1px solid #1f1f22", fontSize: 12 },
-  notice: { margin: 14, padding: 14, background: "#17202a", border: "1px solid #164e63", borderRadius: 8 },
-  endpoint: { display: "block", margin: "0 18px 18px", color: "#52525b", fontSize: 10, fontFamily: "monospace" },
-};

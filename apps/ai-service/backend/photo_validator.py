@@ -50,7 +50,7 @@ from pathlib import Path
 
 # ── Model setup ───────────────────────────────────────────────────────────────
 
-MODEL_DIR = Path(__file__).parent / "insightface_models"
+MODEL_DIR = Path.home() / ".insightface"
 MODEL_DIR.mkdir(exist_ok=True)
 
 # Minimum face area as fraction of total image area

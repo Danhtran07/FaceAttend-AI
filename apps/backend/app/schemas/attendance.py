@@ -1,15 +1,9 @@
 from datetime import date, datetime
-from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, field_serializer
 
 from app.core.timezone import to_vietnam_time
-
-
-class AttendanceStatus(str, Enum):
-    PRESENT = "PRESENT"
-    LATE = "LATE"
-    ABSENT = "ABSENT"
+from app.models.attendance import AttendanceStatus
 
 
 class AttendanceBase(BaseModel):
@@ -31,9 +25,14 @@ class AttendanceUpdate(BaseModel):
 
 class AttendanceResponse(AttendanceBase):
     id: int
+    shift_id: int | None = None
     check_in: datetime | None = None
     check_out: datetime | None = None
     status: AttendanceStatus
+    late_minutes: int
+    early_leave_minutes: int
+    working_minutes: int
+    overtime_minutes: int
     created_at: datetime
     updated_at: datetime
 
@@ -42,6 +41,24 @@ class AttendanceResponse(AttendanceBase):
         return to_vietnam_time(value)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceRecognitionEmployee(BaseModel):
+    id: int
+    name: str
+
+
+class AttendanceRecognitionData(BaseModel):
+    matched: bool
+    confidence: float
+    liveness: bool
+
+
+class AttendanceRecognitionResponse(BaseModel):
+    success: bool
+    employee: AttendanceRecognitionEmployee
+    attendance: AttendanceResponse
+    recognition: AttendanceRecognitionData
 
 
 class AttendanceCalendarDay(BaseModel):

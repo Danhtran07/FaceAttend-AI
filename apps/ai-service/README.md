@@ -47,10 +47,54 @@ Each challenge requires 20 consecutive passing frames (~1.3s at 15fps). Between 
 - `POST /face/search` — 1:N search across the database (FAISS)
 - `POST /face/analyze` — age, gender, emotion, smile score
 
-### 5. React Native Camera Component (`frontend/FaceCapture.jsx`)
+| POST | `/face/search` | 1:N — find the closest matching faces in the local face store |
+| POST | `/face/recognize` | Backend recognition against caller-provided employee embeddings |
 Drop-in Expo component that enforces face quality in real-time before enabling the capture button. Replaces paid SDK dependencies for basic capture gating. Shows live indicators for:
 - Face detected
 - Single person
+
+#### Backend recognition contract
+
+The Backend owns employee identity data and sends the candidate embeddings to
+the AI Service. The AI Service does not access PostgreSQL, create attendance,
+or process Backend JWTs. `liveness_session_id` must identify a completed
+challenge-based liveness session created by `/session/create`.
+
+```http
+POST /face/recognize
+Content-Type: application/json
+```
+
+```json
+{
+  "image": "<base64 JPEG>",
+  "liveness_session_id": "<completed session id>",
+  "candidates": [
+    { "employee_id": 123, "embedding": [0.01, 0.02] }
+  ],
+  "threshold": 0.5
+}
+```
+
+The candidate embedding must have the same dimension as the InsightFace
+embedding (512 values in the bundled model). A successful match returns:
+
+```json
+{
+  "matched": true,
+  "employee_id": 123,
+  "confidence": 0.964,
+  "liveness": true,
+  "success": true,
+  "recognized": true,
+  "error_code": null,
+  "message": null
+}
+```
+
+Recognition failures return a structured response or HTTP error with one of
+these codes: `INVALID_IMAGE`, `NO_FACE`, `MULTIPLE_FACES`,
+`FACE_NOT_RECOGNIZED`, `LIVENESS_FAILED`, or `INFERENCE_ERROR`.
 - Face centred
 - No occlusion
 

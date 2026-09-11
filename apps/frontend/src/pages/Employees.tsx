@@ -1,19 +1,33 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import {
+  DrawingUtils,
+  FaceLandmarker,
+  FilesetResolver,
+} from "@mediapipe/tasks-vision";
+import { BadgeCheck, Pencil, ScanFace, Search, Trash2, UsersRound } from "lucide-react";
 
 import {
   createEmployee,
   deleteEmployee,
+  enrollEmployeeFace,
   getEmployees,
   updateEmployee,
 } from "../api/employee.api";
+import { createLivenessSession } from "../api/recognition.api";
 
 import {
   getApiErrorMessage,
 } from "../api/error";
+
+import {
+  evaluateFaceCaptureQuality,
+} from "../utils/faceQuality";
+import { drawMirroredVideoFrame } from "../utils/cameraMirror";
 
 import type {
   Employee,
@@ -47,12 +61,22 @@ const emptyForm: EmployeeForm = {
   user_id: "",
 };
 
+const FACE_LANDMARKER_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
 
 /* ============================================================
    PAGE
 ============================================================ */
 
 export default function Employees() {
+  const isAdmin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}").role === "ADMIN";
+    } catch {
+      return false;
+    }
+  })();
 
   /* ----------------------------------------------------------
      Employees
@@ -124,6 +148,32 @@ export default function Employees() {
     deleteError,
     setDeleteError,
   ] = useState("");
+
+  const [faceMessage, setFaceMessage] = useState("");
+  const [faceError, setFaceError] = useState("");
+  const [enrollingId, setEnrollingId] = useState<number | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [capturedFrames, setCapturedFrames] = useState<File[]>([]);
+  const [submittingEnrollment, setSubmittingEnrollment] = useState(false);
+  const [enrollmentChallenge, setEnrollmentChallenge] = useState("WAITING");
+  const [enrollmentChallengeIndex, setEnrollmentChallengeIndex] = useState(-1);
+  const [enrollmentFeedback, setEnrollmentFeedback] = useState("Preparing face scan...");
+  const [livenessComplete, setLivenessComplete] = useState(false);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const livenessCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const livenessSocketRef = useRef<WebSocket | null>(null);
+  const livenessTimerRef = useRef<number | null>(null);
+  const meshAnimationRef = useRef<number | null>(null);
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const autoScanTimerRef = useRef<number | null>(null);
+  const captureInFlightRef = useRef(false);
+  const capturedFramesRef = useRef<File[]>([]);
+  const submittingEnrollmentRef = useRef(false);
+  const livenessCompleteRef = useRef(false);
 
 
   /* ==========================================================
@@ -450,6 +500,10 @@ export default function Employees() {
             created,
           ]
         );
+
+        closeModal();
+        startFaceEnrollment(created.id);
+        return;
       }
 
 
@@ -533,6 +587,325 @@ export default function Employees() {
     }
   }
 
+  function stopCameraStream() {
+    if (autoScanTimerRef.current !== null) {
+      window.clearInterval(autoScanTimerRef.current);
+      autoScanTimerRef.current = null;
+    }
+
+    if (livenessTimerRef.current !== null) {
+      window.clearInterval(livenessTimerRef.current);
+      livenessTimerRef.current = null;
+    }
+
+    livenessSocketRef.current?.close();
+    livenessSocketRef.current = null;
+
+    if (meshAnimationRef.current !== null) {
+      window.cancelAnimationFrame(meshAnimationRef.current);
+      meshAnimationRef.current = null;
+    }
+    faceLandmarkerRef.current?.close();
+    faceLandmarkerRef.current = null;
+
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    const video = cameraVideoRef.current;
+    if (video) {
+      video.srcObject = null;
+    }
+  }
+
+  async function startEnrollmentMesh() {
+    const video = cameraVideoRef.current;
+    const canvas = document.getElementById("enrollment-mesh-canvas") as HTMLCanvasElement | null;
+    if (!video || !canvas) return;
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+    );
+    const landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: FACE_LANDMARKER_MODEL,
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+    });
+    faceLandmarkerRef.current = landmarker;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const drawingUtils = new DrawingUtils(context);
+
+    const drawMesh = () => {
+      if (!faceLandmarkerRef.current || video.videoWidth === 0 || video.videoHeight === 0) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      const result = landmarker.detectForVideo(video, performance.now());
+      for (const landmarks of result.faceLandmarks) {
+        drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_TESSELATION, {
+          color: "rgba(45, 212, 191, 0.72)",
+          lineWidth: 1,
+        });
+        drawingUtils.drawLandmarks(landmarks, {
+          color: "rgba(255, 255, 255, 0.9)",
+          radius: 1,
+        });
+      }
+      meshAnimationRef.current = window.requestAnimationFrame(drawMesh);
+    };
+
+    drawMesh();
+  }
+
+  async function startEnrollmentLiveness() {
+    try {
+      const session = await createLivenessSession();
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const token = localStorage.getItem("access_token");
+      const socket = new WebSocket(
+        `${protocol}//${window.location.host}/api/attendance/liveness/${session.session_id}?access_token=${encodeURIComponent(token || "")}`
+      );
+      socket.binaryType = "arraybuffer";
+      livenessSocketRef.current = socket;
+
+      socket.onopen = () => {
+        setEnrollmentFeedback("Keep your face inside the frame...");
+        livenessTimerRef.current = window.setInterval(() => {
+          const video = cameraVideoRef.current;
+          const canvas = livenessCanvasRef.current;
+          if (!video || !canvas || socket.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          drawMirroredVideoFrame(context, video, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (blob && socket.readyState === WebSocket.OPEN) socket.send(blob);
+          }, "image/jpeg", 0.75);
+        }, 1000 / 12);
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data) as {
+          challenge?: string;
+          challenge_index?: number;
+          feedback?: string;
+          error?: string;
+        };
+        if (message.error) {
+          setCameraError(message.error);
+          return;
+        }
+        setEnrollmentChallenge(message.challenge || "WAITING");
+        setEnrollmentChallengeIndex(message.challenge_index ?? -1);
+        setEnrollmentFeedback(message.feedback || "Follow the instruction on screen...");
+        if (message.challenge === "COMPLETE") {
+          livenessCompleteRef.current = true;
+          setLivenessComplete(true);
+          setEnrollmentFeedback("Liveness verified. Hold still while we scan 3 samples...");
+          if (livenessTimerRef.current !== null) {
+            window.clearInterval(livenessTimerRef.current);
+            livenessTimerRef.current = null;
+          }
+          socket.close();
+        }
+      };
+      socket.onerror = () => setCameraError("Unable to connect to liveness verification.");
+    } catch (error) {
+      setCameraError(getApiErrorMessage(error, "Unable to start liveness verification."));
+    }
+  }
+
+  async function openCameraForEnrollment() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is not supported by this browser.");
+      return;
+    }
+
+    try {
+      setCameraError("");
+      setCameraLoading(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      const video = cameraVideoRef.current;
+      if (!video) {
+        throw new Error("Camera preview is unavailable.");
+      }
+
+      video.srcObject = stream;
+      await video.play();
+      void startEnrollmentMesh().catch(() => setCameraError("Unable to load face mesh."));
+      void startEnrollmentLiveness();
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Camera permission was denied. Please allow camera access and try again."
+          : getApiErrorMessage(error, "Unable to open the camera.");
+      setCameraError(message);
+    } finally {
+      setCameraLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!showCameraModal) {
+      stopCameraStream();
+      return;
+    }
+
+    void openCameraForEnrollment();
+    autoScanTimerRef.current = window.setInterval(() => {
+      if (livenessCompleteRef.current && capturedFramesRef.current.length < 3 && !submittingEnrollmentRef.current) {
+        void handleCaptureFrame();
+      }
+    }, 1400);
+
+    return () => {
+      stopCameraStream();
+    };
+  }, [showCameraModal]);
+
+  useEffect(() => {
+    if (capturedFrames.length >= 3 && !submittingEnrollment) {
+      void submitCapturedFrames();
+    }
+  }, [capturedFrames.length, submittingEnrollment]);
+
+  function closeCameraModal() {
+    setShowCameraModal(false);
+    capturedFramesRef.current = [];
+    livenessCompleteRef.current = false;
+    setCapturedFrames([]);
+    setLivenessComplete(false);
+    setEnrollmentChallenge("WAITING");
+    setEnrollmentChallengeIndex(-1);
+    setEnrollmentFeedback("Preparing face scan...");
+    setCameraError("");
+    setCameraLoading(false);
+    setEnrollingId(null);
+    stopCameraStream();
+  }
+
+  async function handleCaptureFrame() {
+    if (captureInFlightRef.current || capturedFramesRef.current.length >= 3) {
+      return;
+    }
+
+    const video = cameraVideoRef.current;
+    const canvas = cameraCanvasRef.current;
+
+    if (!video || !canvas) {
+      setCameraError("The camera is not ready yet. Please try again.");
+      return;
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError("The camera is still starting. Please wait a moment.");
+      return;
+    }
+
+    try {
+      captureInFlightRef.current = true;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Canvas is not available.");
+      }
+
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (nextBlob) => {
+            if (nextBlob) {
+              resolve(nextBlob);
+              return;
+            }
+            reject(new Error("Unable to encode the camera image."));
+          },
+          "image/jpeg",
+          0.9
+        );
+      });
+
+      const imageBitmap = await createImageBitmap(blob);
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = imageBitmap.width;
+      tempCanvas.height = imageBitmap.height;
+      const tempContext = tempCanvas.getContext("2d");
+      if (!tempContext) {
+        throw new Error("Image processing is not available.");
+      }
+      tempContext.drawImage(imageBitmap, 0, 0);
+      const imageData = tempContext.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const quality = evaluateFaceCaptureQuality(imageData);
+
+      if (!quality.valid) {
+        setCameraError(quality.message);
+        return;
+      }
+
+      const file = new File([blob], `employee-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setCapturedFrames((current) => {
+        const nextFrames = [...current, file];
+        capturedFramesRef.current = nextFrames;
+        return nextFrames;
+      });
+      setCameraError("");
+    } catch (error) {
+      setCameraError(getApiErrorMessage(error, "Unable to capture the face frame."));
+    } finally {
+      captureInFlightRef.current = false;
+    }
+  }
+
+  async function submitCapturedFrames() {
+    if (enrollingId === null || capturedFrames.length === 0) {
+      return;
+    }
+
+    try {
+      submittingEnrollmentRef.current = true;
+      setSubmittingEnrollment(true);
+      setFaceError("");
+      const result = await enrollEmployeeFace(enrollingId, capturedFrames);
+      setFaceMessage(`${result.embeddings_saved} face embeddings saved. This employee can now use AI check-in.`);
+      setEmployees((current) => current.map((employee) => employee.id === enrollingId ? { ...employee, face_enrolled: true } : employee));
+      closeCameraModal();
+    } catch (error) {
+      setFaceError(getApiErrorMessage(error));
+      closeCameraModal();
+    } finally {
+      submittingEnrollmentRef.current = false;
+      setSubmittingEnrollment(false);
+    }
+  }
+
+  function startFaceEnrollment(employeeId: number) {
+    setFaceError("");
+    setFaceMessage("");
+    setEnrollingId(employeeId);
+    setCapturedFrames([]);
+    setShowCameraModal(true);
+  }
 
   /* ==========================================================
      RENDER
@@ -597,7 +970,7 @@ export default function Employees() {
         </div>
 
 
-        <button
+        {isAdmin && <button
           type="button"
           onClick={openCreateModal}
           disabled={loading}
@@ -629,9 +1002,102 @@ export default function Employees() {
           </span>
 
           Add Employee
-        </button>
+        </button>}
 
       </header>
+
+      {showCameraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-600">Face enrollment</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">Capture live face sample</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              <video
+                ref={cameraVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-[420px] w-full scale-x-[-1] object-cover"
+              />
+              <canvas
+                id="enrollment-mesh-canvas"
+                className="pointer-events-none absolute inset-0 h-full w-full scale-x-[-1] object-cover"
+              />
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">
+                <span className="rounded-full bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
+                  {enrollmentFeedback}
+                </span>
+              </div>
+              <canvas ref={cameraCanvasRef} className="hidden" />
+              <canvas ref={livenessCanvasRef} className="hidden" />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-500">
+                {livenessComplete
+                  ? `${capturedFrames.length}/3 clean frame(s) scanned`
+                  : "Complete the liveness checks before sample scanning"}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                {([
+                  ["TURN_LEFT", "Quay trái", 0],
+                  ["TURN_RIGHT", "Quay phải", 1],
+                  ["MOUTH_OPEN", "Mở miệng", 2],
+                ] as const).map(([key, label, index]) => (
+                  <span
+                    key={key}
+                    className={`rounded-full px-2.5 py-1 ${
+                      enrollmentChallenge === key
+                        ? "bg-amber-100 text-amber-700"
+                        : enrollmentChallenge === "COMPLETE" || enrollmentChallengeIndex > index
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-3 text-center text-sm font-semibold text-emerald-600">
+              {submittingEnrollment ? "Saving enrollment..." : livenessComplete ? "Scanning automatically..." : "Mesh tracking active"}
+            </p>
+
+            {(cameraError || faceError) && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {cameraError || faceError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(faceMessage || faceError) && (
+        <div
+          className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
+            faceError
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {faceError || faceMessage}
+        </div>
+      )}
 
 
       {/* ======================================================
@@ -744,7 +1210,7 @@ export default function Employees() {
                 text-slate-400
               "
             >
-              🔍
+              <Search size={17} strokeWidth={2} />
             </span>
 
             <input
@@ -958,7 +1424,7 @@ export default function Employees() {
                   text-2xl
                 "
               >
-                👥
+                <UsersRound size={28} strokeWidth={1.8} />
               </div>
 
               <h3
@@ -987,7 +1453,7 @@ export default function Employees() {
                   : "Start by creating your first employee."}
               </p>
 
-              {!search && (
+              {!search && isAdmin && (
 
                 <button
                   type="button"
@@ -1209,16 +1675,26 @@ export default function Employees() {
                               )}
                             </div>
 
-                            <span
-                              className="
-                                whitespace-nowrap
-                                text-sm
-                                font-bold
-                                text-slate-800
-                              "
-                            >
-                              {employee.full_name}
-                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate whitespace-nowrap text-sm font-bold text-slate-800">
+                                  {employee.full_name}
+                                </span>
+                                {employee.face_enrolled && (
+                                  <span title="Face capture verified">
+                                    <BadgeCheck
+                                      size={17}
+                                      strokeWidth={2.5}
+                                      className="shrink-0 text-emerald-600"
+                                      aria-label="Face capture verified"
+                                    />
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                {employee.face_enrolled ? "Face verified" : "Face not captured"}
+                              </p>
+                            </div>
 
                           </div>
 
@@ -1314,13 +1790,25 @@ export default function Employees() {
                           "
                         >
 
-                          <div
+                          {isAdmin && <div
                             className="
                               flex
                               justify-end
                               gap-2
                             "
                           >
+
+                            {/* Face enrollment */}
+
+                            <button
+                              type="button"
+                              title={employee.face_enrolled ? "Recapture face" : "Capture face"}
+                              onClick={() => startFaceEnrollment(employee.id)}
+                              disabled={enrollingId !== null || saving}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {enrollingId === employee.id ? "..." : employee.face_enrolled ? <BadgeCheck size={17} strokeWidth={2.5} /> : <ScanFace size={17} strokeWidth={2} />}
+                            </button>
 
                             {/* Edit */}
 
@@ -1355,7 +1843,7 @@ export default function Employees() {
                                 disabled:opacity-40
                               "
                             >
-                              ✎
+                              <Pencil size={16} strokeWidth={2} />
                             </button>
 
 
@@ -1407,10 +1895,10 @@ export default function Employees() {
                                     "
                                   />
                                 )
-                                : "🗑"}
+                                : <Trash2 size={16} strokeWidth={2} />}
                             </button>
 
-                          </div>
+                          </div>}
 
                         </td>
 

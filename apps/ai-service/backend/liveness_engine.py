@@ -19,6 +19,8 @@ NOSE_TIP = 1
 #   - Person turns THEIR RIGHT → nose moves RIGHT in image → yaw_proxy POSITIVE
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
+LEFT_EYE_LANDMARKS = (33, 160, 158, 133, 153, 144)
+RIGHT_EYE_LANDMARKS = (362, 385, 387, 263, 373, 380)
 
 # Thresholds
 # yaw_proxy < -0.30  → person has turned LEFT
@@ -29,9 +31,19 @@ NEUTRAL_THRESHOLD    =  0.15   # within ±0.15 counts as "facing forward"
 
 # Smile blendshape threshold (0–1 score from MediaPipe)
 SMILE_SCORE_THRESHOLD = 0.5
+# Webcam frames often under-report MediaPipe eye closure scores. Keep this
+# above neutral noise while allowing a natural blink to pass reliably.
+BLINK_SCORE_THRESHOLD = 0.25
+MOUTH_OPEN_SCORE_THRESHOLD = 0.25
+
+UPPER_INNER_LIP = 13
+LOWER_INNER_LIP = 14
+LEFT_MOUTH_CORNER = 78
+RIGHT_MOUTH_CORNER = 308
 
 SPOOF_TEXTURE_MIN = 50.0
 SPOOF_Z_STD_MIN   = 0.008
+LOW_LIGHT_MEAN    = 25.0
 
 MODEL_PATH = Path(__file__).parent / "face_landmarker.task"
 
@@ -73,7 +85,10 @@ class LivenessEngine:
         h, w = frame.shape[:2]
 
         yaw_proxy   = self._compute_yaw_proxy(landmarks)
+        blink_score = self._compute_blink_score(result, landmarks)
         smile_score = self._compute_smile_score(result)
+        mouth_open_score = self._compute_mouth_open_score(result, landmarks)
+        lighting_mean = self._compute_lighting_mean(frame, landmarks, w, h)
         texture_var, z_std, is_spoof = self._check_spoof(frame, landmarks, w, h)
         forehead    = self.extract_forehead_rgb(frame, landmarks, w, h)
 
@@ -81,7 +96,11 @@ class LivenessEngine:
         metrics = FaceMetrics(
             face_detected=True,
             yaw_proxy=round(yaw_proxy, 4),
+            blink_score=round(blink_score, 4),
             smile_score=round(smile_score, 4),
+            mouth_open_score=round(mouth_open_score, 4),
+            lighting_mean=round(lighting_mean, 2),
+            is_low_light=lighting_mean < LOW_LIGHT_MEAN,
             texture_variance=round(texture_var, 2),
             landmark_z_std=round(z_std, 6),
             is_spoof=is_spoof,
@@ -129,6 +148,62 @@ class LivenessEngine:
         left  = bs.get("mouthSmileLeft",  0.0)
         right = bs.get("mouthSmileRight", 0.0)
         return float((left + right) / 2)
+
+    def _compute_mouth_open_score(self, result, landmarks) -> float:
+        """Combine jaw-open blendshape and normalized inner-lip distance."""
+        bs = self.extract_blendshapes(result)
+        blendshape_score = bs.get("jawOpen", 0.0)
+        mouth_width = np.hypot(
+            landmarks[LEFT_MOUTH_CORNER].x - landmarks[RIGHT_MOUTH_CORNER].x,
+            landmarks[LEFT_MOUTH_CORNER].y - landmarks[RIGHT_MOUTH_CORNER].y,
+        )
+        if mouth_width <= 1e-6:
+            return float(blendshape_score)
+        mouth_height = np.hypot(
+            landmarks[UPPER_INNER_LIP].x - landmarks[LOWER_INNER_LIP].x,
+            landmarks[UPPER_INNER_LIP].y - landmarks[LOWER_INNER_LIP].y,
+        )
+        geometric_score = float(np.clip((mouth_height / mouth_width - 0.05) / 0.15, 0.0, 1.0))
+        return float(max(blendshape_score, geometric_score))
+
+    def _compute_blink_score(self, result, landmarks) -> float:
+        """Combine MediaPipe eye closure scores with geometric eye openness."""
+        bs = self.extract_blendshapes(result)
+        left = bs.get("eyeBlinkLeft", 0.0)
+        right = bs.get("eyeBlinkRight", 0.0)
+        blendshape_score = (left + right) / 2
+
+        left_ear = self._eye_aspect_ratio(landmarks, LEFT_EYE_LANDMARKS)
+        right_ear = self._eye_aspect_ratio(landmarks, RIGHT_EYE_LANDMARKS)
+        ear = (left_ear + right_ear) / 2
+        geometric_score = float(np.clip((0.23 - ear) / 0.18, 0.0, 1.0))
+        return float(max(blendshape_score, geometric_score))
+
+    @staticmethod
+    def _eye_aspect_ratio(landmarks, indices: tuple[int, ...]) -> float:
+        outer, upper_a, upper_b, inner, lower_a, lower_b = (
+            landmarks[index] for index in indices
+        )
+        horizontal = np.hypot(outer.x - inner.x, outer.y - inner.y)
+        if horizontal <= 1e-6:
+            return 1.0
+        vertical = (
+            np.hypot(upper_a.x - lower_b.x, upper_a.y - lower_b.y)
+            + np.hypot(upper_b.x - lower_a.x, upper_b.y - lower_a.y)
+        )
+        return float(vertical / (2 * horizontal))
+
+    def _compute_lighting_mean(self, frame, landmarks, w: int, h: int) -> float:
+        xs = [lm.x for lm in landmarks]
+        ys = [lm.y for lm in landmarks]
+        x1 = max(0, int(min(xs) * w))
+        y1 = max(0, int(min(ys) * h))
+        x2 = min(w, int(max(xs) * w))
+        y2 = min(h, int(max(ys) * h))
+        face_crop = frame[y1:y2, x1:x2]
+        if face_crop.size == 0:
+            return 0.0
+        return float(cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY).mean())
 
     def _spoof_decision(self, texture_var: float, z_std: float, face_width: int, face_height: int) -> bool:
         """Reject spoof only when the face crop is large enough and the texture/depth signal is clearly implausible."""

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +11,14 @@ from app.core.security import create_access_token
 from app.main import app
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
+from app.models.face_data import FaceData
+from app.models.schedule_assignment import ScheduleAssignment
+from app.models.schedule_rule import ScheduleRule
+from app.models.shift import Shift
 from app.models.user import User, UserRole
+from app.models.work_schedule import WorkSchedule
+from app.schemas.ai import AIRecognitionResult
+from app.api.routes.attendance import _get_ai_client
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -208,11 +215,96 @@ def test_create_attendance_success(db_session, auth_headers, employee):
     assert data["status"] == "LATE"
 
 
+def test_recognize_attendance_sends_employee_gallery_to_ai(
+    db_session,
+    auth_headers,
+    employee,
+):
+    db_session.add_all(
+        [
+            FaceData(employee_id=employee.id, embedding=[1.0, 0.0], model_name="test-model"),
+            FaceData(employee_id=employee.id, embedding=[0.9, 0.1], model_name="test-model"),
+        ]
+    )
+    db_session.commit()
+
+    class FakeAIClient:
+        def __init__(self):
+            self.candidates = None
+            self.liveness_session_id = None
+
+        def recognize(self, image, candidates, fast_mode=False, liveness_session_id=None):
+            self.candidates = candidates
+            self.liveness_session_id = liveness_session_id
+            assert fast_mode is True
+            return AIRecognitionResult(
+                matched=True,
+                employee_id=employee.id,
+                confidence=0.96,
+                liveness=True,
+            )
+
+    fake_client = FakeAIClient()
+    app.dependency_overrides[_get_ai_client] = lambda: fake_client
+
+    try:
+        response = client.post(
+            "/api/attendance/recognize",
+            files={"image": ("frame.jpg", b"image-bytes", "image/jpeg")},
+            data={"liveness_session_id": "session-123"},
+            headers=auth_headers,
+        )
+    finally:
+        app.dependency_overrides.pop(_get_ai_client, None)
+
+    assert response.status_code == 201
+    assert response.json()["employee"]["id"] == employee.id
+    assert fake_client.liveness_session_id == "session-123"
+    assert [(candidate.employee_id, candidate.embedding) for candidate in fake_client.candidates] == [
+        (employee.id, [1.0, 0.0]),
+        (employee.id, [0.9, 0.1]),
+    ]
+
+
 def test_create_attendance_auto_sets_late_status_when_check_in_is_late(
     db_session,
     auth_headers,
     employee,
 ):
+    shift = Shift(
+        name="Morning Shift",
+        code="MORNING-CRUD",
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        late_tolerance_minutes=15,
+        early_checkin_minutes=30,
+        is_overnight=False,
+        is_active=True,
+    )
+    schedule = WorkSchedule(
+        name="Tuesday Schedule",
+        code="TUESDAY-CRUD",
+        is_active=True,
+    )
+    db_session.add_all([shift, schedule])
+    db_session.flush()
+    db_session.add_all(
+        [
+            ScheduleRule(
+                schedule_id=schedule.id,
+                shift_id=shift.id,
+                day_of_week=2,
+            ),
+            ScheduleAssignment(
+                employee_id=employee.id,
+                schedule_id=schedule.id,
+                effective_from=date(2026, 9, 1),
+                is_active=True,
+            ),
+        ]
+    )
+    db_session.commit()
+
     payload = {
         "employee_id": employee.id,
         "date": "2026-09-08",

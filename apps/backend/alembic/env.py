@@ -17,8 +17,12 @@ from app.models import (
     AttendanceStatus,
     Employee,
     FaceData,
+    ScheduleAssignment,
+    ScheduleRule,
+    Shift,
     User,
     UserProfile,
+    WorkSchedule,
 )
 
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Any
 from enum import Enum
 
@@ -8,7 +8,9 @@ from enum import Enum
 class ChallengeType(str, Enum):
     TURN_LEFT  = "TURN_LEFT"
     TURN_RIGHT = "TURN_RIGHT"
+    BLINK      = "BLINK"
     SMILE      = "SMILE"
+    MOUTH_OPEN = "MOUTH_OPEN"
     COMPLETE   = "COMPLETE"
     FAILED     = "FAILED"
 
@@ -21,12 +23,18 @@ class SessionState(str, Enum):
     EXPIRED    = "EXPIRED"
 
 
-CHALLENGE_SEQUENCE = [ChallengeType.TURN_LEFT, ChallengeType.TURN_RIGHT]
+CHALLENGE_SEQUENCE = [
+    ChallengeType.TURN_LEFT,
+    ChallengeType.TURN_RIGHT,
+    ChallengeType.MOUTH_OPEN,
+]
 
 CHALLENGE_INSTRUCTIONS = {
     ChallengeType.TURN_LEFT:  "Slowly turn your head to the LEFT",
     ChallengeType.TURN_RIGHT: "Now turn your head to the RIGHT",
-    ChallengeType.SMILE:      "Great! Now give us a big SMILE",
+    ChallengeType.BLINK:      "Please blink slowly",
+    ChallengeType.SMILE:      "Now give us a big SMILE",
+    ChallengeType.MOUTH_OPEN: "Open your mouth slightly",
     ChallengeType.COMPLETE:   "Verification complete!",
     ChallengeType.FAILED:     "Verification failed. Please try again.",
 }
@@ -35,7 +43,11 @@ CHALLENGE_INSTRUCTIONS = {
 class FaceMetrics(BaseModel):
     face_detected: bool
     yaw_proxy: float = 0.0
+    blink_score: float = 0.0
     smile_score: float = 0.0
+    mouth_open_score: float = 0.0
+    lighting_mean: float = 0.0
+    is_low_light: bool = False
     texture_variance: float = 0.0
     landmark_z_std: float = 0.0
     is_spoof: bool = False
@@ -157,8 +169,39 @@ class LegacyRecognizeCandidate(BaseModel):
 
 class LegacyRecognizeRequest(BaseModel):
     image: str
-    candidates: list[LegacyRecognizeCandidate] = []
+    candidates: list[LegacyRecognizeCandidate] = Field(default_factory=list)
     threshold: float = 0.5
+    min_margin: float = 0.05
+    fast_mode: bool = False
+    liveness_session_id: Optional[str] = None
+
+
+class BackendRecognitionResponse(BaseModel):
+    matched: bool
+    employee_id: Optional[int] = None
+    confidence: float = 0.0
+    liveness: bool
+    # Kept for compatibility with the existing FaceAttend client contract.
+    success: bool = True
+    recognized: Optional[bool] = None
+    error_code: Optional[str] = None
+    message: Optional[str] = None
+
+
+class RecognitionFeedbackRequest(BaseModel):
+    false_positive: bool
+
+
+class RecognitionMetricsResponse(BaseModel):
+    total_requests: int
+    matched_requests: int
+    failed_requests: int
+    failure_rate: float
+    average_confidence: float
+    failure_reasons: dict[str, int]
+    labeled_results: int
+    false_positive_reports: int
+    false_positive_rate: float
 
 
 class EmotionScores(BaseModel):

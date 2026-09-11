@@ -1,98 +1,252 @@
-# FaceAttend
+<div align="center">
 
-## Project Overview
+# FaceAttend AI
 
-Face Recognition Attendance System.
+### AI-Powered Attendance Management System
 
-## Team
-- Khoa — AI Engineer
-- Danh — Backend Engineer
-- Tín — Frontend Engineer
+<p>
+  <b>Facial Recognition</b> •
+  <b>Attendance</b> •
+  <b>Employee Management</b> •
+  <b>AI Verification</b>
+</p>
 
-## Tech Stack
+<p>
+  <img src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=for-the-badge&logo=react&logoColor=black">
+  <img src="https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img src="https://img.shields.io/badge/AI-InsightFace-FF6B35?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+</p>
 
-Frontend:
-- React
-- TypeScript
+<p>
+  A modern attendance management system using
+  <b>facial recognition and AI-based verification</b>
+  to automate employee check-in and check-out.
+  <br>
+  <b>This project is built for learning, demo, and portfolio purposes.</b>
+</p>
 
-Backend:
-- FastAPI
-- Python
+</div>
 
-Database:
-- PostgreSQL
+---
+
+## Overview
+
+FaceAttend AI is a learning-focused demo project for building an intelligent attendance management system
+that combines **facial recognition, employee verification,
+attendance tracking, and AI processing**.
+
+This repository is intended to showcase how a full-stack AI application can be structured using a React frontend, FastAPI backend, PostgreSQL database, and a dedicated AI recognition service.
+
+### Core Features
+
+| Feature | Description |
+|---|---|
+| Face Recognition | Identify employees using facial embeddings |
+| Check-in / Check-out | Automate attendance recording |
+| Employee Verification | Verify employee identity |
+| Attendance Tracking | Store and manage attendance records |
+| AI Processing | Face detection, alignment, embedding and matching |
+| Admin Management | Manage employees and attendance |
+| REST API | API-first backend architecture |
+| Docker | Containerized development environment |
+
+---
+
+## Architecture
+
+```text
+                    ┌─────────────────────┐
+                    │      Frontend       │
+                    │ React + TypeScript  │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │       Backend       │
+                    │ FastAPI + SQLAlchemy│
+                    └───────┬───────┬─────┘
+                            │       │
+                  ┌─────────┘       └─────────┐
+                  ▼                           ▼
+        ┌─────────────────┐          ┌─────────────────┐
+        │   PostgreSQL    │          │   AI Service    │
+        │    Database     │          │ FastAPI + AI    │
+        └─────────────────┘          └────────┬────────┘
+                                              │
+                                              ▼
+                                     ┌─────────────────┐
+                                     │   InsightFace   │
+                                     │ Face Recognition│
+                                     └─────────────────┘
+```
+
+---
 
 ## Project Structure
 
-This repository is a monorepo organized under a standard `apps/` folder:
+This project is built as a monorepo and includes three main modules:
 
-- `apps/backend/` — FastAPI backend service (Danh)
-- `apps/ai-service/` — AI model service (Khoa)
-- `apps/frontend/` — Vite + React frontend (Tín)
-- `database/` — database migrations and schema (if added later)
+- `apps/backend/` — REST API, authentication, attendance logic, and database integration
+- `apps/ai-service/` — AI processing service for face analysis and recognition
+- `apps/frontend/` — web application for employees and administrators
 
-Each service contains its own app entrypoint and can run independently.
+The main goal is to provide a secure, modern attendance workflow with:
 
-## Run With Docker (recommended)
+- face-based recognition
+- employee verification
+- attendance tracking
+- API-first backend architecture
+- containerized local development using Docker
 
-Requirements: Docker Desktop with Compose, Node.js 18 or newer, and Git.
+## Tech Stack
 
-From the repository root:
+### Frontend
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
 
+### Backend
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- JWT authentication
+
+### AI Service
+- Python
+- FastAPI
+- InsightFace / face processing pipeline
+- Embedding-based recognition flow
+
+### Database
+- PostgreSQL
+
+### DevOps / Local Setup
+- Docker
+- Docker Compose
+
+```text
+.
+├── apps/
+│   ├── backend/
+│   ├── ai-service/
+│   └── frontend/
+├── docker-compose.yml
+├── .env.example
+├── README.md
+└── LICENSE
 ```
+
+> Note: This is a demo and learning project, not a production-ready enterprise deployment.
+
+## AI Service Source References
+
+This project uses the face biometrics workflow and learning approach from the following open-source reference:
+
+- [amoghgg/face-biometrics-api](https://github.com/amoghgg/face-biometrics-api) — Face biometrics API with active liveness detection (head turns + smile), face recognition (1:1 verify + 1:N search), age, gender and emotion analysis. Built with FastAPI + MediaPipe + InsightFace ArcFace.
+
+### What we used as reference
+
+- Face detection and liveness-check patterns
+- Face recognition and verification workflow
+- ArcFace-based embedding concepts
+- MediaPipe / InsightFace integration ideas for demo and learning purposes
+
+> This project is for educational and demonstration purposes. The AI service is inspired by the referenced repository and adapted to fit our attendance demo scenario, not copied as-is for production use.
+
+## Quick Start for Team Members
+
+Follow the steps below to run the project locally.
+
+### 1) Clone the repository
+
+```bash
+git clone <repository-url>
+cd intergration
+```
+
+### 2) Create environment variables
+
+Copy the example environment file:
+
+```bash
 copy .env.example .env
+```
+
+Then review the file and adjust values if needed. The default settings are prepared for Docker-based local development.
+
+> Keep your real `.env` file local and do not commit it to Git.
+
+### 3) Start all services with Docker
+
+From the repository root, run:
+
+```bash
 docker compose up -d --build
 ```
 
-The backend waits for PostgreSQL and runs the Alembic migrations automatically.
-The services are available at:
+This will start:
 
-- Backend: http://localhost:8000
-- Backend health: http://localhost:8000/health
-- AI service: http://localhost:8002
-- AI service health: http://localhost:8002/health
+- PostgreSQL database
+- FastAPI backend at http://localhost:8000
+- AI service at http://localhost:8002
 
-Run the frontend in a second terminal:
+Check health endpoints:
 
-```
+- Backend: http://localhost:8000/health
+- AI service: http://localhost:8002/health
+
+The backend container will automatically run Alembic migrations before starting the app.
+
+### 4) Start the frontend separately
+
+Open a second terminal and run:
+
+```bash
 cd apps/frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. Vite proxies `/api` requests to the backend, so no
-frontend API URL configuration is required for local development.
+Then open:
 
-JWT configuration belongs only in the backend environment. Never put
-`JWT_SECRET_KEY` in frontend env files or commit the real `.env` file. For a
-shared or production environment, replace the example secret with a random
-value, for example:
+- Frontend: http://localhost:5173
 
-```
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
+The frontend uses Vite and proxies API requests to the backend locally, so no additional API base URL configuration is normally required.
 
-Set the generated value as `JWT_SECRET_KEY` in `.env`. Keep the same secret for
-all backend instances that need to validate each other's tokens. Changing it
-invalidates existing login sessions.
+### 5) Useful commands
 
-Useful commands:
-
-```
+```bash
 docker compose ps
 docker compose logs -f backend
+docker compose logs -f ai-service
 docker compose down
 ```
 
-If port `8000` is already in use, change `BACKEND_PORT` in `.env`. Do not change
-the internal Docker values `POSTGRES_HOST=postgres` or `DATABASE_URL`.
+If port `8000` is already in use, update `BACKEND_PORT` in `.env`. If the AI service port is occupied, update `AI_SERVICE_HOST_PORT` in `.env`.
 
-## Run Services Without Docker
+### 6) JWT secret setup
 
-For manual development, use a local PostgreSQL instance and set `DATABASE_URL`
-accordingly. Install backend dependencies first, then run:
+JWT configuration is backend-only and should never be placed in frontend env files.
 
+Generate a secure secret locally:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
+
+Then set it as `JWT_SECRET_KEY` in `.env`.
+
+## Local Development Without Docker
+
+If you want to run services manually instead of using Docker Compose:
+
+### Backend
+
+```bash
 cd apps/backend
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -101,11 +255,38 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
-In another terminal:
+### Frontend
 
-```
+```bash
 cd apps/frontend
 npm install
+npm run dev
+```
+
+### AI service
+
+```bash
+cd apps/ai-service/backend
+pip install -r ../requirements.txt
+uvicorn main:app --reload --port 8001
+```
+
+The Docker setup exposes the AI service on port `8002` by default. If that port is in use, change `AI_SERVICE_HOST_PORT` in `.env`.
+
+## Environment Notes
+
+- `.env.example` is the shared template
+- `.env` is local-only and should not be committed
+- PostgreSQL credentials and JWT secret must remain in backend configuration
+- Do not change internal Docker references like `POSTGRES_HOST=postgres` or `DATABASE_URL` unless you know the system is intentionally being modified
+
+## Current Status
+
+The project includes AI-powered face recognition workflows and attendance logic across backend and AI service components. The repo is designed to support iterative development by multiple team members in parallel.
+
+## License
+
+This project is released under the project license included in the repository.
 npm run dev
 ```
 

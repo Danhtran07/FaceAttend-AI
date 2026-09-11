@@ -1,3 +1,5 @@
+import { CircleAlert } from "lucide-react";
+
 interface ErrorStateProps {
   message: string;
   onRetry?: () => void;
@@ -11,7 +13,7 @@ export default function ErrorState({
     <div className="flex min-h-[240px] items-center justify-center">
       <div className="max-w-md rounded-xl border border-red-200 bg-red-50 p-6 text-center">
         <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
-          !
+          <CircleAlert size={20} strokeWidth={2} />
         </div>
 
         <h3 className="text-sm font-bold text-red-800">

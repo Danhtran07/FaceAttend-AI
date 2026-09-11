@@ -12,13 +12,15 @@ import insightface
 from insightface.app import FaceAnalysis
 
 SIMILARITY_THRESHOLD = 0.45   # cosine similarity above this = same person
-MODEL_DIR = Path(__file__).parent / "insightface_models"
+MODEL_DIR = Path.home() / ".insightface"
 MODEL_DIR.mkdir(exist_ok=True)
 
 
 @dataclass
 class FaceAnalysisResult:
     face_detected: bool
+    image_valid: bool = True
+    face_count: int = 0
     embedding: np.ndarray | None = None   # 512-dim ArcFace embedding
     age: int | None = None
     gender: str | None = None             # "male" / "female"
@@ -39,7 +41,7 @@ class FaceRecognitionEngine:
         nparr = np.frombuffer(jpeg_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if frame is None:
-            return FaceAnalysisResult(face_detected=False)
+            return FaceAnalysisResult(face_detected=False, image_valid=False)
 
         faces = self.app.get(frame)
         if not faces:
@@ -53,6 +55,7 @@ class FaceRecognitionEngine:
 
         return FaceAnalysisResult(
             face_detected=True,
+            face_count=len(faces),
             embedding=face.normed_embedding,   # already L2-normalized
             age=int(face.age),
             gender=gender,

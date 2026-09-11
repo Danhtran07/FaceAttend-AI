@@ -11,6 +11,7 @@ export interface Employee {
   department: string | null;
 
   user_id: number;
+  face_enrolled: boolean;
 
   created_at?: string;
 

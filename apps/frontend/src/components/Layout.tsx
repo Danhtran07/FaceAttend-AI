@@ -6,6 +6,16 @@ import {
 } from "react-router-dom";
 
 import { useState } from "react";
+import {
+  CalendarCheck2,
+  CalendarDays,
+  Clock3,
+  LayoutDashboard,
+  LogOut,
+  ScanFace,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 
 interface StoredUser {
   username?: string;
@@ -58,6 +68,11 @@ const isUsersActive =
   location.pathname.startsWith(
     "/users"
   );
+
+  const isShiftsActive = location.pathname.startsWith("/shifts");
+  const isSchedulesActive = location.pathname.startsWith("/schedules");
+  const isMyScheduleActive = location.pathname.includes("schedule");
+
 
   function handleLogout() {
     localStorage.removeItem(
@@ -250,7 +265,7 @@ const isUsersActive =
                 }
               `}
             >
-              ▦
+              <LayoutDashboard size={18} strokeWidth={2} />
             </span>
 
             <span>
@@ -260,6 +275,46 @@ const isUsersActive =
           </Link>
 
 
+          {/* Face Attendance */}
+
+          <Link
+            to="/recognition"
+            onClick={closeMobileMenu}
+            className="
+              mb-1
+              flex items-center
+              gap-3
+              rounded-xl
+              px-3.5 py-3
+              text-sm font-semibold
+              no-underline
+              transition
+              text-slate-600
+              hover:bg-blue-50
+              hover:text-blue-600
+            "
+          >
+            <span
+              className="
+                flex h-9 w-9
+                items-center justify-center
+                rounded-lg
+                bg-blue-50
+                text-lg
+                text-blue-600
+              "
+            >
+              <ScanFace size={18} strokeWidth={2} />
+            </span>
+
+            <span>
+              Face Attendance
+            </span>
+
+          </Link>
+
+
+          {role === "ADMIN" && (<>
           {/* Employees */}
 
           <Link
@@ -296,7 +351,7 @@ const isUsersActive =
                 }
               `}
             >
-              ♙
+              <UsersRound size={18} strokeWidth={2} />
             </span>
 
             <span>
@@ -304,6 +359,7 @@ const isUsersActive =
             </span>
 
           </Link>
+          </>)}
 {/* Attendance */}
 
 <Link
@@ -340,13 +396,29 @@ const isUsersActive =
       }
     `}
   >
-    ✓
+    <CalendarCheck2 size={18} strokeWidth={2} />
   </span>
 
   <span>
-    Attendance
+    {role === "ADMIN" ? "Attendance Calendar" : "My Attendance"}
   </span>
 </Link>
+{role === "ADMIN" && (<>
+  <Link to="/shifts" onClick={closeMobileMenu} className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold no-underline transition ${isShiftsActive ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"}`}>
+    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isShiftsActive ? "bg-white text-blue-600" : "bg-slate-100 text-slate-500"}`}><Clock3 size={18} strokeWidth={2} /></span>
+    <span>Shifts</span>
+  </Link>
+  <Link to="/schedules" onClick={closeMobileMenu} className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold no-underline transition ${isSchedulesActive ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"}`}>
+    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isSchedulesActive ? "bg-white text-blue-600" : "bg-slate-100 text-slate-500"}`}><CalendarDays size={18} strokeWidth={2} /></span>
+    <span>Schedules</span>
+  </Link>
+</>)}
+{role !== "ADMIN" && (
+  <Link to="/my-schedule" onClick={closeMobileMenu} className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold no-underline transition ${isMyScheduleActive ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"}`}>
+    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isMyScheduleActive ? "bg-white text-blue-600" : "bg-slate-100 text-slate-500"}`}><CalendarDays size={18} strokeWidth={2} /></span>
+    <span>My Schedule</span>
+  </Link>
+)}
 {role === "ADMIN" && (
   <Link
     to="/users"
@@ -382,7 +454,7 @@ const isUsersActive =
         }
       `}
     >
-      ♙
+      <UsersRound size={18} strokeWidth={2} />
     </span>
 
     <span>
@@ -404,15 +476,11 @@ const isUsersActive =
           "
         >
 
-          <div
-            className="
-              mb-3
-              flex items-center
-              gap-3
-              rounded-xl
-              bg-slate-50
-              p-3
-            "
+          <Link
+            to="/profile"
+            onClick={closeMobileMenu}
+            aria-label="Open my profile"
+            className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3 no-underline transition hover:bg-blue-50"
           >
 
             <div
@@ -426,7 +494,7 @@ const isUsersActive =
                 text-blue-600
               "
             >
-              {avatar}
+              <UserRound size={20} strokeWidth={2} />
             </div>
 
             <div className="min-w-0">
@@ -456,7 +524,7 @@ const isUsersActive =
 
             </div>
 
-          </div>
+          </Link>
 
 
           <button
@@ -485,7 +553,7 @@ const isUsersActive =
             "
           >
             <span className="text-base">
-              ↪
+              <LogOut size={16} strokeWidth={2} />
             </span>
 
             Logout
@@ -589,13 +657,10 @@ const isUsersActive =
 
             {/* User */}
 
-            <div
-              className="
-                flex items-center
-                gap-2
-                border-l border-slate-200
-                pl-4
-              "
+            <Link
+              to="/profile"
+              aria-label="Open my profile"
+              className="flex items-center gap-2 border-l border-slate-200 pl-4 no-underline"
             >
 
               <div
@@ -608,7 +673,7 @@ const isUsersActive =
                   text-blue-600
                 "
               >
-                {avatar}
+                <UserRound size={16} strokeWidth={2} />
               </div>
 
               <span
@@ -622,7 +687,7 @@ const isUsersActive =
                 {username}
               </span>
 
-            </div>
+            </Link>
 
           </div>
 

@@ -26,6 +26,7 @@ class EmployeeUpdate(BaseModel):
 class EmployeeResponse(EmployeeBase):
     id: int
     user_id: int
+    face_enrolled: bool
     created_at: datetime
     updated_at: datetime
 
